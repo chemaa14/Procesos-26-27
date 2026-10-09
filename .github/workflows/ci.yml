@@ -1,0 +1,27 @@
+name: Pruebas automáticas
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, hito1/ci-cd]
+
+permissions:
+  contents: read
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v7
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Ejecutar las pruebas
+        run: npm test
