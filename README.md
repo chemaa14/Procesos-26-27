@@ -68,3 +68,36 @@ Ejecutar `npm test`.
 Actualmente hay 13 pruebas: 3 del esqueleto y 10 de gestión de usuarios,
 incluidos casos de error y protección frente a modificaciones
 accidentales de los objetos devueltos.
+
+
+### API de usuarios
+
+Los datos se almacenan en memoria y se pierden al reiniciar el servidor.
+
+| Método | Ruta | Operación |
+|---|---|---|
+| POST | /api/usuarios | Crear un usuario |
+| GET | /api/usuarios | Listar usuarios no eliminados |
+| GET | /api/usuarios/:id/activo | Consultar si un usuario está activo |
+| DELETE | /api/usuarios/:id | Eliminar un usuario mediante borrado lógico |
+
+Un usuario está activo cuando está confirmado y no está eliminado.
+
+Las rutas de usuarios requieren provisionalmente la cabecera:
+Authorization: Bearer <valor de API_ADMIN_TOKEN>
+
+El token se configura mediante la variable de entorno API_ADMIN_TOKEN.
+Si no está configurado, estas rutas responden con 503.
+Este mecanismo se sustituirá por la autenticación y autorización
+correspondientes durante el desarrollo de las sesiones.
+
+### Pruebas automatizadas
+
+Ejecutar con:
+
+npm test
+
+Actualmente hay 26 pruebas:
+- 3 de estructura.
+- 10 de lógica de usuarios.
+- 13 de la API de usuarios.
