@@ -41,3 +41,30 @@ node:test para ejecutar las pruebas automatizadas.
 
 Variables opcionales: PORT y HOST.
 En esta etapa no se necesitan secretos ni servicios externos.
+
+## Gestión de usuarios en memoria
+
+La capa de datos almacena los usuarios en un Map. Los datos se pierden
+cuando se reinicia el proceso y no se comparten entre instancias.
+
+La capa lógica permite:
+- Dar de alta usuarios pendientes de confirmación.
+- Validar nombres y correos y rechazar correos duplicados.
+- Listar los usuarios no eliminados.
+- Consultar si un usuario está activo.
+- Realizar una baja lógica del usuario.
+
+Un usuario está activo cuando está confirmado y no está eliminado.
+La confirmación es una operación interna, todavía sin verificación
+por correo ni ruta pública.
+
+Estas operaciones aún no están expuestas mediante la API.
+El registro con contraseña y la sesión se implementarán posteriormente.
+
+### Pruebas
+
+Ejecutar `npm test`.
+
+Actualmente hay 13 pruebas: 3 del esqueleto y 10 de gestión de usuarios,
+incluidos casos de error y protección frente a modificaciones
+accidentales de los objetos devueltos.

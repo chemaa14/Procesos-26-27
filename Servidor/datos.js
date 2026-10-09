@@ -4,4 +4,30 @@ export class DatosUsuarios {
   constructor() {
     this.usuarios = new Map();
   }
+
+  guardar(usuario) {
+    this.usuarios.set(usuario.id, { ...usuario });
+    return { ...usuario };
+  }
+
+  buscarPorId(id) {
+    const usuario = this.usuarios.get(id);
+    return usuario ? { ...usuario } : null;
+  }
+
+  buscarPorEmail(email) {
+    const usuario = [...this.usuarios.values()].find(
+      (usuario) => usuario.email === email
+    );
+
+    return usuario ? { ...usuario } : null;
+  }
+
+  listar() {
+    return [...this.usuarios.values()].map(
+      (usuario) => ({ ...usuario })
+    );
+  }
 }
+
+//Este módulo almacena y recupera usuarios mediante un Map. Devuelve copias para evitar que quien consulte un usuario modifique accidentalmente el objeto almacenado.
