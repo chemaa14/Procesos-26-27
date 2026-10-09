@@ -158,6 +158,22 @@ export function crearAplicacion({
           aplicacion: "CineMatch"
         });
       }
+      
+      if (url.pathname === "/api/registro") {
+          if (peticion.method !== "POST") {
+            return metodoNoPermitido(respuesta, "POST");
+          }
+
+          const cuerpo = await leerJSON(peticion);
+
+          const usuario = await logica.registrar({
+            nombre: cuerpo.nombre,
+            email: cuerpo.email,
+            password: cuerpo.password
+          });
+
+          return responderJSON(respuesta, 201, { usuario });
+        }
 
       const rutaActivo = ruta.match(
         /^\/api\/usuarios\/([^/]+)\/activo$/
@@ -253,6 +269,7 @@ export function crearAplicacion({
         const estados = {
           NOMBRE_INVALIDO: 400,
           EMAIL_INVALIDO: 400,
+          PASSWORD_INVALIDA: 400,
           EMAIL_DUPLICADO: 409,
           USUARIO_NO_ENCONTRADO: 404,
           USUARIO_ELIMINADO: 409

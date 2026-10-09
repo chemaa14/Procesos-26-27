@@ -1,6 +1,7 @@
 // Capa de lógica de negocio.
 // Recibe la capa de datos; no depende de HTTP ni de la interfaz.
 import { randomUUID } from "node:crypto";
+import { generarHash } from "./passwords.js";
 
 export class ErrorUsuarios extends Error {
   constructor(codigo, mensaje) {
@@ -100,4 +101,34 @@ export class LogicaUsuarios {
     usuario.eliminado = true;
     this.datos.guardar(usuario);
   }
+
+  async registrar({ nombre, email, password } = {}) {
+  let hash;
+
+  try {
+    hash = await generarHash(password);
+  } catch (error) {
+    if (
+      typeof password !== "string" ||
+      [...password].length < 15 ||
+      [...password].length > 128
+    ) {
+      throw new ErrorUsuarios(
+        "PASSWORD_INVALIDA",
+        "La contraseña debe tener entre 15 y 128 caracteres."
+      );
+    }
+
+    throw error;
+  }
+
+  // alta valida nombre, correo y duplicados antes de guardar.
+  const usuario = this.alta({ nombre, email });
+
+  this.datos.guardarHashPassword(usuario.id, hash);
+
+  return usuario;
 }
+
+}
+

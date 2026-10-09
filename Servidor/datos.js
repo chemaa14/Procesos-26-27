@@ -1,8 +1,10 @@
 // Capa de datos.
 // En la tercera rama implementaremos las operaciones sobre este Map.
+//Este módulo almacena y recupera usuarios mediante un Map. Devuelve copias para evitar que quien consulte un usuario modifique accidentalmente el objeto almacenado.
 export class DatosUsuarios {
   constructor() {
     this.usuarios = new Map();
+    this.passwords = new Map();
   }
 
   guardar(usuario) {
@@ -28,6 +30,15 @@ export class DatosUsuarios {
       (usuario) => ({ ...usuario })
     );
   }
+
+  guardarHashPassword(id, hash) {
+  this.passwords.set(id, hash);
+  }
+
+  buscarHashPassword(id) {
+    return this.passwords.get(id) ?? null;
+  }
+
 }
 
-//Este módulo almacena y recupera usuarios mediante un Map. Devuelve copias para evitar que quien consulte un usuario modifique accidentalmente el objeto almacenado.
+
