@@ -101,3 +101,23 @@ Actualmente hay 26 pruebas:
 - 3 de estructura.
 - 10 de lógica de usuarios.
 - 13 de la API de usuarios.
+
+### Registro local
+
+POST /api/registro permite registrar una cuenta sin token administrativo.
+
+Recibe un objeto JSON con:
+- nombre
+- email
+- password: entre 15 y 128 caracteres.
+
+La contraseña se almacena mediante un hash scrypt con sal aleatoria.
+Ni la contraseña ni su hash aparecen en las respuestas de usuarios.
+
+Respuestas:
+- 201: usuario creado, pendiente de confirmación.
+- 400: datos no válidos.
+- 409: correo ya registrado.
+
+Los usuarios y los hashes siguen en memoria y se pierden al reiniciar.
+El inicio de sesión y la confirmación por correo están pendientes.
