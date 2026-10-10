@@ -3,8 +3,11 @@ import {
   registrarUsuario,
   iniciarSesion,
   obtenerSesion,
-  cerrarSesion
+  cerrarSesion,
+  eliminarMiCuenta
 } from "./rest.js";
+
+
 
 const estado = document.getElementById("estado");
 const estadoSesion = document.getElementById("estado-sesion");
@@ -17,6 +20,7 @@ const formRegistro = document.getElementById("form-registro");
 const formLogin = document.getElementById("form-login");
 const botonSalir = document.getElementById("cerrar-sesion");
 const botonReintentar = document.getElementById("reintentar");
+const botonEliminar = document.getElementById("eliminar-cuenta");
 
 let ocupado = false;
 
@@ -169,6 +173,52 @@ botonSalir.addEventListener("click", async () => {
 botonReintentar.addEventListener("click", () => {
   comprobarServidor();
   recuperarSesion();
+});
+
+
+
+botonEliminar.addEventListener("click", async () => {
+  if (ocupado) return;
+
+  const confirmado = window.confirm(
+    "¿Quieres eliminar tu cuenta? Perderás el acceso y se cerrarán " +
+    "todas tus sesiones. No podrás recuperarla desde la aplicación."
+  );
+
+  if (!confirmado) return;
+
+  cambiarOcupado(true);
+  mostrarMensaje("Eliminando cuenta...");
+
+  let volverAlAcceso = false;
+
+  try {
+    await eliminarMiCuenta();
+
+    formRegistro.reset();
+    formLogin.reset();
+    mostrarUsuario(null);
+
+    mostrarMensaje("Tu cuenta ha sido eliminada y tus sesiones se han cerrado.");
+    volverAlAcceso = true;
+  } catch (error) {
+    if (error.estado === 401) {
+      mostrarUsuario(null);
+      mostrarMensaje(
+        "Tu sesión ya no es válida. Vuelve a iniciar sesión.",
+        true
+      );
+      volverAlAcceso = true;
+    } else {
+      mostrarMensaje(error.message, true);
+    }
+  } finally {
+    cambiarOcupado(false);
+  }
+
+  if (volverAlAcceso) {
+    document.getElementById("login-email").focus();
+  }
 });
 
 comprobarServidor();

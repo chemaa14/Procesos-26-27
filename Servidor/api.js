@@ -294,6 +294,35 @@ function exigirUsuario(peticion) {
           return respuesta.end();
         }
 
+        if (ruta === "/api/perfil") {
+          // La identidad se obtiene de la sesión, nunca del cliente.
+          const usuario = exigirUsuario(peticion);
+
+          if (metodo === "GET") {
+            return responderJSON(respuesta, 200, { usuario });
+          }
+
+          if (metodo === "DELETE") {
+            comprobarCabeceraCliente(peticion);
+
+            logica.eliminar(usuario.id);
+
+            // Invalida todas las sesiones de esta cuenta.
+            sesiones.eliminarDeUsuario(usuario.id);
+
+            // Borra también la cookie de este navegador.
+            escribirCookieSesion(respuesta, null, cookieSegura);
+
+            respuesta.writeHead(204, {
+              "Cache-Control": "no-store"
+            });
+
+            return respuesta.end();
+          }
+
+        return metodoNoPermitido(respuesta, "GET, DELETE");
+      }
+
       const rutaActivo = ruta.match(
         /^\/api\/usuarios\/([^/]+)\/activo$/
       );
@@ -344,6 +373,8 @@ function exigirUsuario(peticion) {
         }
 
         logica.eliminar(rutaUsuario[1]);
+        sesiones.eliminarDeUsuario(rutaUsuario[1]);
+        
         respuesta.writeHead(204, { "Cache-Control": "no-store" });
         return respuesta.end();
       }

@@ -117,3 +117,9 @@ export function cerrarSesion() {
     metodo: "POST"
   });
 }
+
+export function eliminarMiCuenta() {
+  return realizarPeticion("/api/perfil", {
+    metodo: "DELETE"
+  });
+}
