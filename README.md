@@ -163,3 +163,15 @@ Comprobación manual local realizada:
 - Cierre de sesión y posterior recarga sin acceso.
 
 La confirmación por correo sigue pendiente.
+
+### Rutas protegidas y eliminación de cuenta
+
+- GET /api/perfil permite consultar el usuario de la sesión.
+- DELETE /api/perfil permite eliminar la cuenta propia con sesión válida.
+- La eliminación es lógica e invalida todas las sesiones del usuario.
+- La interfaz solicita confirmación antes de eliminar la cuenta.
+
+Validación: 67 pruebas automáticas superadas.
+Comprobaciones manuales: cancelar la eliminación conserva la cuenta;
+confirmarla cierra la sesión; recargar mantiene la sesión cerrada;
+intentar acceder de nuevo con la cuenta eliminada se rechaza.
