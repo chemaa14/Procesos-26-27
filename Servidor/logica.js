@@ -1,7 +1,12 @@
 // Capa de lógica de negocio.
 // Recibe la capa de datos; no depende de HTTP ni de la interfaz.
 import { randomUUID } from "node:crypto";
-import { generarHash } from "./passwords.js";
+import { generarHash,verificarPassword } from "./passwords.js";
+
+// Permite realizar también el cálculo cuando el correo no existe.
+// Este valor ficticio nunca permite autenticar a un usuario.
+const HASH_FICTICIO =
+  `scrypt-v1$${"0".repeat(32)}$${"0".repeat(128)}`;
 
 export class ErrorUsuarios extends Error {
   constructor(codigo, mensaje) {
@@ -128,7 +133,52 @@ export class LogicaUsuarios {
   this.datos.guardarHashPassword(usuario.id, hash);
 
   return usuario;
+
+
+
+  
 }
+async autenticar({ email, password } = {}) {
+  const errorAcceso = () => new ErrorUsuarios(
+    "CREDENCIALES_INVALIDAS",
+    "No se ha podido iniciar sesión con esas credenciales."
+  );
+
+  if (typeof email !== "string" || typeof password !== "string") {
+    throw errorAcceso();
+  }
+
+  const emailNormalizado = email.trim().toLowerCase();
+  const usuario = this.datos.buscarPorEmail(emailNormalizado);
+
+  const hash = usuario
+    ? this.datos.buscarHashPassword(usuario.id)
+    : null;
+
+  const passwordCorrecta = await verificarPassword(
+    password,
+    hash ?? HASH_FICTICIO
+  );
+
+  if (!usuario || !hash || !passwordCorrecta) {
+    throw errorAcceso();
+  }
+
+  // Consultamos de nuevo porque el estado podría haber cambiado
+  // mientras se comprobaba la contraseña.
+  const usuarioActual = this.datos.buscarPorId(usuario.id);
+
+  if (
+    !usuarioActual ||
+    !usuarioActual.confirmado ||
+    usuarioActual.eliminado
+  ) {
+    throw errorAcceso();
+  }
+
+  return usuarioActual;
+}
+
 
 }
 

@@ -121,3 +121,27 @@ Respuestas:
 
 Los usuarios y los hashes siguen en memoria y se pierden al reiniciar.
 El inicio de sesión y la confirmación por correo están pendientes.
+
+### Autenticación y sesiones
+
+- POST /api/login: recibe email y password; inicia sesión únicamente
+  si la contraseña es correcta y la cuenta está confirmada y no eliminada.
+- GET /api/sesion: devuelve el usuario conectado o 401 si la sesión
+  no es válida.
+- POST /api/logout: elimina la sesión del servidor y borra su cookie.
+
+Login y logout requieren la cabecera X-CineMatch: 1.
+El login recibe el cuerpo en formato application/json.
+
+Las sesiones se almacenan en memoria y caducan a las 8 horas.
+La cookie utiliza HttpOnly, SameSite=Lax y Path=/.
+Con NODE_ENV=production también utiliza Secure y requiere HTTPS.
+
+Usuarios y sesiones se pierden al reiniciar el servidor y no se
+comparten entre instancias.
+
+Las rutas administrativas /api/usuarios siguen protegidas mediante
+API_ADMIN_TOKEN. Tener una sesión no concede permisos de administrador.
+
+La interfaz y la comprobación de la sesión al recargar el navegador
+están pendientes de implementar.

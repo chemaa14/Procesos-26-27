@@ -5,6 +5,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 
 import { DatosUsuarios } from "./datos.js";
 import { LogicaUsuarios, ErrorUsuarios } from "./logica.js";
+import { Sesiones } from "./sesiones.js";
 
 const archivosPublicos = {
   "/": {
@@ -134,11 +135,77 @@ function leerJSON(peticion) {
   });
 }
 
-export function crearAplicacion({
-  tokenAdmin = process.env.API_ADMIN_TOKEN || ""
-} = {}) {
+const NOMBRE_COOKIE = "cinematch_sesion";
+const DURACION_SESION_SEGUNDOS = 8 * 60 * 60;
+
+function leerTokenSesion(peticion) {
+  const cookies = (peticion.headers.cookie ?? "")
+    .split(";")
+    .map(cookie => cookie.trim());
+
+  const coincidencias = cookies.filter(cookie =>
+    cookie.startsWith(`${NOMBRE_COOKIE}=`)
+  );
+
+  if (coincidencias.length !== 1) {
+    return null;
+  }
+
+  const token = coincidencias[0].slice(NOMBRE_COOKIE.length + 1);
+
+  return /^[a-f0-9]{64}$/.test(token) ? token : null;
+}
+
+function escribirCookieSesion(respuesta, token, segura) {
+  const atributos = [
+    `${NOMBRE_COOKIE}=${token ?? ""}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Lax",
+    `Max-Age=${token ? DURACION_SESION_SEGUNDOS : 0}`
+  ];
+
+  if (segura) {
+    atributos.push("Secure");
+  }
+
+  respuesta.setHeader("Set-Cookie", atributos.join("; "));
+}
+
+function comprobarCabeceraCliente(peticion) {
+  if (peticion.headers["x-cinematch"] !== "1") {
+    throw new ErrorHTTP(403, "Petición no permitida.");
+  }
+}
+
+export function crearAplicacion({ tokenAdmin = process.env.API_ADMIN_TOKEN || "",
+  cookieSegura = process.env.NODE_ENV === "production"
+} = {})
+ {
   const datos = new DatosUsuarios();
   const logica = new LogicaUsuarios(datos);
+
+  const sesiones = new Sesiones({
+  duracionMs: DURACION_SESION_SEGUNDOS * 1000
+});
+
+function exigirUsuario(peticion) {
+  const token = leerTokenSesion(peticion);
+  const sesion = sesiones.obtener(token);
+
+  if (!sesion) {
+    throw new ErrorHTTP(401, "Se requiere una sesión válida.");
+  }
+
+  const usuario = datos.buscarPorId(sesion.usuarioId);
+
+  if (!usuario || !usuario.confirmado || usuario.eliminado) {
+    sesiones.eliminarDeUsuario(sesion.usuarioId);
+    throw new ErrorHTTP(401, "Se requiere una sesión válida.");
+  }
+
+  return usuario;
+}
 
   const servidor = createServer(async (peticion, respuesta) => {
     respuesta.setHeader("X-Content-Type-Options", "nosniff");
@@ -175,6 +242,58 @@ export function crearAplicacion({
           return responderJSON(respuesta, 201, { usuario });
         }
 
+
+        if (url.pathname === "/api/login") {
+          if (peticion.method !== "POST") {
+            return metodoNoPermitido(respuesta, "POST");
+          }
+
+          comprobarCabeceraCliente(peticion);
+
+          const cuerpo = await leerJSON(peticion);
+
+          const usuario = await logica.autenticar({
+            email: cuerpo.email,
+            password: cuerpo.password
+          });
+
+          // Un nuevo login sustituye la sesión anterior de este navegador.
+          sesiones.eliminar(leerTokenSesion(peticion));
+
+          const token = sesiones.crear(usuario.id);
+
+          escribirCookieSesion(respuesta, token, cookieSegura);
+
+          return responderJSON(respuesta, 200, { usuario });
+        }
+
+        if (url.pathname === "/api/sesion") {
+          if (peticion.method !== "GET") {
+            return metodoNoPermitido(respuesta, "GET");
+          }
+
+          const usuario = exigirUsuario(peticion);
+
+          return responderJSON(respuesta, 200, { usuario });
+        }
+
+        if (url.pathname === "/api/logout") {
+          if (peticion.method !== "POST") {
+            return metodoNoPermitido(respuesta, "POST");
+          }
+
+          comprobarCabeceraCliente(peticion);
+
+          sesiones.eliminar(leerTokenSesion(peticion));
+          escribirCookieSesion(respuesta, null, cookieSegura);
+
+          respuesta.writeHead(204, {
+            "Cache-Control": "no-store"
+          });
+
+          return respuesta.end();
+        }
+
       const rutaActivo = ruta.match(
         /^\/api\/usuarios\/([^/]+)\/activo$/
       );
@@ -185,6 +304,8 @@ export function crearAplicacion({
 
       if (ruta === "/api/usuarios" || rutaActivo || rutaUsuario) {
         comprobarAcceso(peticion, tokenAdmin);
+
+        
 
         if (ruta === "/api/usuarios") {
           if (metodo === "GET") {
@@ -272,7 +393,8 @@ export function crearAplicacion({
           PASSWORD_INVALIDA: 400,
           EMAIL_DUPLICADO: 409,
           USUARIO_NO_ENCONTRADO: 404,
-          USUARIO_ELIMINADO: 409
+          USUARIO_ELIMINADO: 409,
+          CREDENCIALES_INVALIDAS: 401
         };
 
         const estado = Object.hasOwn(estados, error.codigo)
