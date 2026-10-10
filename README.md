@@ -145,3 +145,21 @@ API_ADMIN_TOKEN. Tener una sesión no concede permisos de administrador.
 
 La interfaz y la comprobación de la sesión al recargar el navegador
 están pendientes de implementar.
+
+### Interfaz de usuario
+
+La interfaz permite registrar cuentas, iniciar sesión y cerrarla.
+Al cargar la página, consulta /api/sesion para recuperar la sesión vigente.
+
+- Cliente/gui.js gestiona los formularios y los mensajes.
+- Cliente/rest.js realiza las peticiones HTTP.
+- La cookie de sesión la gestiona el navegador; no se almacena
+  el identificador de sesión en localStorage.
+
+Comprobación manual local realizada:
+- Registro de una cuenta pendiente.
+- Inicio de sesión con una cuenta de prueba confirmada.
+- Conservación de la sesión al recargar.
+- Cierre de sesión y posterior recarga sin acceso.
+
+La confirmación por correo sigue pendiente.
