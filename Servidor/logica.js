@@ -1,5 +1,6 @@
 // Capa de lógica de negocio.
 // Recibe la capa de datos; no depende de HTTP ni de la interfaz.
+import { ErrorDatos } from "./errores-datos.js";
 import { randomUUID } from "node:crypto";
 import { generarHash,verificarPassword } from "./passwords.js";
 
@@ -21,7 +22,7 @@ export class LogicaUsuarios {
     this.datos = datos;
   }
 
-  alta({ nombre, email } = {}) {
+  async alta({ nombre, email } = {},hash=null) {
     if (typeof nombre !== "string" || !nombre.trim()) {
       throw new ErrorUsuarios(
         "NOMBRE_INVALIDO",
@@ -45,7 +46,7 @@ export class LogicaUsuarios {
       );
     }
 
-    if (this.datos.buscarPorEmail(emailNormalizado)) {
+    if (await this.datos.buscarPorEmail(emailNormalizado)) {
       throw new ErrorUsuarios(
         "EMAIL_DUPLICADO",
         "Ya existe un usuario con ese correo."
@@ -60,11 +61,23 @@ export class LogicaUsuarios {
       eliminado: false
     };
 
-    return this.datos.guardar(usuario);
+    try {
+      if (hash !== null) {
+        return await this.datos.crearConHash(usuario, hash);
+      }
+
+      return await this.datos.guardar(usuario);
+
+    } catch (error) {
+      if (error instanceof ErrorDatos && error.codigo === "EMAIL_DUPLICADO") {
+        throw new ErrorUsuarios("EMAIL_DUPLICADO", "Ya existe un usuario con ese correo.");
+      }
+      throw error;
+    }
   }
 
-  obtener(id) {
-    const usuario = this.datos.buscarPorId(id);
+  async obtener(id) {
+    const usuario = await this.datos.buscarPorId(id);
 
     if (!usuario) {
       throw new ErrorUsuarios(
@@ -76,19 +89,19 @@ export class LogicaUsuarios {
     return usuario;
   }
 
-  listar() {
-    return this.datos.listar().filter(
+  async listar() {
+    return (await this.datos.listar()).filter(
       (usuario) => !usuario.eliminado
     );
   }
 
-  estaActivo(id) {
-    const usuario = this.obtener(id);
+  async estaActivo(id) {
+    const usuario = await this.obtener(id);
     return usuario.confirmado && !usuario.eliminado;
   }
 
-  confirmar(id) {
-    const usuario = this.obtener(id);
+  async confirmar(id) {
+    const usuario = await this.obtener(id);
 
     if (usuario.eliminado) {
       throw new ErrorUsuarios(
@@ -98,13 +111,13 @@ export class LogicaUsuarios {
     }
 
     usuario.confirmado = true;
-    return this.datos.guardar(usuario);
+    return await this.datos.guardar(usuario);
   }
 
-  eliminar(id) {
-    const usuario = this.obtener(id);
+  async eliminar(id) {
+    const usuario = await this.obtener(id);
     usuario.eliminado = true;
-    this.datos.guardar(usuario);
+    await this.datos.guardar(usuario);
   }
 
   async registrar({ nombre, email, password } = {}) {
@@ -128,15 +141,8 @@ export class LogicaUsuarios {
   }
 
   // alta valida nombre, correo y duplicados antes de guardar.
-  const usuario = this.alta({ nombre, email });
+  return await this.alta({ nombre, email }, hash);
 
-  this.datos.guardarHashPassword(usuario.id, hash);
-
-  return usuario;
-
-
-
-  
 }
 async autenticar({ email, password } = {}) {
   const errorAcceso = () => new ErrorUsuarios(
@@ -149,10 +155,10 @@ async autenticar({ email, password } = {}) {
   }
 
   const emailNormalizado = email.trim().toLowerCase();
-  const usuario = this.datos.buscarPorEmail(emailNormalizado);
+  const usuario = await this.datos.buscarPorEmail(emailNormalizado);
 
   const hash = usuario
-    ? this.datos.buscarHashPassword(usuario.id)
+    ? await this.datos.buscarHashPassword(usuario.id)
     : null;
 
   const passwordCorrecta = await verificarPassword(
@@ -166,7 +172,7 @@ async autenticar({ email, password } = {}) {
 
   // Consultamos de nuevo porque el estado podría haber cambiado
   // mientras se comprobaba la contraseña.
-  const usuarioActual = this.datos.buscarPorId(usuario.id);
+  const usuarioActual = await this.datos.buscarPorId(usuario.id);
 
   if (
     !usuarioActual ||

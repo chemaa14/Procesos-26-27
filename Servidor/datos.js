@@ -1,23 +1,30 @@
-// Capa de datos.
-// En la tercera rama implementaremos las operaciones sobre este Map.
-//Este módulo almacena y recupera usuarios mediante un Map. Devuelve copias para evitar que quien consulte un usuario modifique accidentalmente el objeto almacenado.
+import { ErrorDatos } from "./errores-datos.js";
+
+// Almacenamiento en memoria con un contrato asíncrono.
 export class DatosUsuarios {
   constructor() {
     this.usuarios = new Map();
     this.passwords = new Map();
   }
 
-  guardar(usuario) {
+  async guardar(usuario) {
+    // Comprobar y guardar sin await evita altas simultáneas con el mismo correo.
+    const duplicado = [...this.usuarios.values()].some(
+      (existente) => existente.email === usuario.email && existente.id !== usuario.id
+    );
+    if (duplicado) {
+      throw new ErrorDatos("EMAIL_DUPLICADO", "Ya existe un usuario con ese correo.");
+    }
     this.usuarios.set(usuario.id, { ...usuario });
     return { ...usuario };
   }
 
-  buscarPorId(id) {
+  async buscarPorId(id) {
     const usuario = this.usuarios.get(id);
     return usuario ? { ...usuario } : null;
   }
 
-  buscarPorEmail(email) {
+  async buscarPorEmail(email) {
     const usuario = [...this.usuarios.values()].find(
       (usuario) => usuario.email === email
     );
@@ -25,19 +32,45 @@ export class DatosUsuarios {
     return usuario ? { ...usuario } : null;
   }
 
-  listar() {
+  async listar() {
     return [...this.usuarios.values()].map(
       (usuario) => ({ ...usuario })
     );
   }
 
-  guardarHashPassword(id, hash) {
+  async guardarHashPassword(id, hash) {
   this.passwords.set(id, hash);
   }
 
-  buscarHashPassword(id) {
+  async buscarHashPassword(id) {
     return this.passwords.get(id) ?? null;
   }
+
+  async crearConHash(usuario, hash) {
+  const duplicado = [...this.usuarios.values()].some(
+    (existente) => existente.email === usuario.email
+  );
+
+  if (duplicado) {
+    throw new ErrorDatos(
+      "EMAIL_DUPLICADO",
+      "Ya existe un usuario con ese correo."
+    );
+  }
+
+  if (this.usuarios.has(usuario.id)) {
+    throw new ErrorDatos(
+      "ID_DUPLICADO",
+      "Ya existe un usuario con ese identificador."
+    );
+  }
+
+  // No hay await entre ambas escrituras.
+  this.usuarios.set(usuario.id, { ...usuario });
+  this.passwords.set(usuario.id, hash);
+
+  return { ...usuario };
+}
 
 }
 

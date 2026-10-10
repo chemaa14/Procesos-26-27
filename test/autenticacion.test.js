@@ -26,7 +26,7 @@ async function prepararUsuario() {
 
 test("autentica una cuenta confirmada con la contraseña correcta", async () => {
   const { logica, usuario } = await prepararUsuario();
-  logica.confirmar(usuario.id);
+  (await logica.confirmar(usuario.id));
 
   const resultado = await logica.autenticar({
     email: " ANA@example.com ",
@@ -56,8 +56,8 @@ test("rechaza una cuenta pendiente aunque la contraseña sea correcta", async ()
 test("rechaza una cuenta eliminada aunque estuviera confirmada", async () => {
   const { logica, usuario } = await prepararUsuario();
 
-  logica.confirmar(usuario.id);
-  logica.eliminar(usuario.id);
+  (await logica.confirmar(usuario.id));
+  (await logica.eliminar(usuario.id));
 
   await assert.rejects(
     () => logica.autenticar({
@@ -70,7 +70,7 @@ test("rechaza una cuenta eliminada aunque estuviera confirmada", async () => {
 
 test("usa el mismo error para correo inexistente y contraseña incorrecta", async () => {
   const { logica, usuario } = await prepararUsuario();
-  logica.confirmar(usuario.id);
+  (await logica.confirmar(usuario.id));
 
   for (const credenciales of [
     {

@@ -5,9 +5,14 @@
   "type": "module",
   "scripts": {
     "start": "node Servidor/api.js",
-    "test": "node --test"
+    "test": "node --test",
+    "start:postgres": "node --env-file=.env Servidor/inicio-postgres.js",
+    "test:postgres": "node --env-file-if-exists=.env --test integracion/postgres.js"
   },
   "engines": {
     "node": ">=24.19.0 <25"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
   }
 }

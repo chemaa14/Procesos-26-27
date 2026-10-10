@@ -90,7 +90,7 @@ test("API: consulta el estado pendiente y confirmado", async () => {
     assert.deepEqual(await pendiente.json(), { activo: false });
 
     // Confirmación interna: no existe una ruta pública para hacerlo.
-    logica.confirmar(usuario.id);
+    (await logica.confirmar(usuario.id));
 
     const confirmada = await pedir(ruta);
     assert.equal(confirmada.status, 200);
@@ -102,7 +102,7 @@ test("API: eliminar devuelve 204 y retira al usuario del listado", async () => {
   await conServidor(async ({ pedir, logica }) => {
     const creada = await alta(pedir);
     const { usuario } = await creada.json();
-    logica.confirmar(usuario.id);
+    (await logica.confirmar(usuario.id));
 
     const respuesta = await pedir(`/api/usuarios/${usuario.id}`, {
       method: "DELETE"
@@ -216,7 +216,7 @@ test("API: un cuerpo demasiado grande devuelve 413", async () => {
 
 test("API: todas las operaciones rechazan credenciales ausentes o incorrectas", async () => {
   await conServidor(async ({ pedir, logica }) => {
-    const usuario = logica.alta({
+    const usuario = await logica.alta({
       nombre: "Ana",
       email: "ana@example.com"
     });
@@ -243,8 +243,8 @@ test("API: todas las operaciones rechazan credenciales ausentes o incorrectas", 
       }
     }
 
-    assert.equal(logica.listar().length, 1);
-    assert.equal(logica.obtener(usuario.id).eliminado, false);
+    assert.equal((await logica.listar()).length, 1);
+    assert.equal((await logica.obtener(usuario.id)).eliminado, false);
   });
 });
 
