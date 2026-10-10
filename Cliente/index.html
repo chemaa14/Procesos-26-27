@@ -5,14 +5,158 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CineMatch</title>
   <script type="module" src="/gui.js"></script>
+
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 0;
+      background: #f5f5f5;
+      color: #202020;
+    }
+
+    main {
+      max-width: 760px;
+      margin: auto;
+      padding: 24px;
+    }
+
+    section {
+      background: white;
+      padding: 24px;
+      margin: 20px 0;
+      border: 1px solid #ddd;
+      border-radius: 12px;
+    }
+
+    label {
+      display: block;
+      margin-top: 16px;
+      font-weight: 600;
+    }
+
+    input {
+      box-sizing: border-box;
+      width: 100%;
+      padding: 10px;
+      margin-top: 6px;
+      font: inherit;
+      border: 1px solid #777;
+      border-radius: 6px;
+    }
+
+    button {
+      padding: 10px 18px;
+      margin-top: 18px;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: wait;
+    }
+
+    :focus-visible {
+      outline: 3px solid #7340a3;
+      outline-offset: 3px;
+    }
+
+    .error {
+      color: #a01515;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+  </style>
 </head>
+
 <body>
   <main>
     <h1>CineMatch</h1>
     <p>Tu próxima película empieza aquí.</p>
 
-    <h2>Hito 1: estructura inicial</h2>
     <p id="estado" role="status">Comprobando conexión...</p>
+    <p id="estado-sesion" role="status">Comprobando sesión...</p>
+    <p id="mensaje" role="status" aria-live="polite"></p>
+    <button id="reintentar" type="button" hidden>
+      Reintentar conexión
+    </button>
+
+    <div id="acceso" hidden>
+      <section aria-labelledby="titulo-registro">
+        <h2 id="titulo-registro">Crear cuenta</h2>
+
+        <form id="form-registro">
+          <label for="registro-nombre">Nombre</label>
+          <input
+            id="registro-nombre"
+            name="nombre"
+            autocomplete="name"
+            required
+          >
+
+          <label for="registro-email">Correo electrónico</label>
+          <input
+            id="registro-email"
+            name="email"
+            type="email"
+            autocomplete="username"
+            required
+          >
+
+          <label for="registro-password">Contraseña</label>
+          <input
+            id="registro-password"
+            name="password"
+            type="password"
+            autocomplete="new-password"
+            aria-describedby="ayuda-password"
+            required
+          >
+          <p id="ayuda-password">
+            Entre 15 y 128 caracteres. Puedes utilizar una frase con espacios.
+          </p>
+
+          <button type="submit">Crear cuenta</button>
+        </form>
+      </section>
+
+      <section aria-labelledby="titulo-login">
+        <h2 id="titulo-login">Iniciar sesión</h2>
+
+        <form id="form-login">
+          <label for="login-email">Correo electrónico</label>
+          <input
+            id="login-email"
+            name="email"
+            type="email"
+            autocomplete="username"
+            required
+          >
+
+          <label for="login-password">Contraseña</label>
+          <input
+            id="login-password"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            required
+          >
+
+          <button type="submit">Entrar</button>
+        </form>
+      </section>
+    </div>
+
+    <section id="panel-usuario" aria-labelledby="bienvenida" hidden>
+      <h2 id="bienvenida" tabindex="-1"></h2>
+      <p id="correo-usuario"></p>
+      <button id="cerrar-sesion" type="button">Cerrar sesión</button>
+    </section>
+
+    <noscript>
+      Necesitas activar JavaScript para utilizar los formularios.
+    </noscript>
   </main>
 </body>
 </html>
