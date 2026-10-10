@@ -10,8 +10,8 @@ function crearLogica() {
   return new LogicaUsuarios(new DatosUsuarios());
 }
 
-function comprobarError(operacion, codigo) {
-  assert.throws(
+async function comprobarError(operacion, codigo) {
+  await assert.rejects(
     operacion,
     (error) =>
       error instanceof ErrorUsuarios &&
@@ -19,10 +19,10 @@ function comprobarError(operacion, codigo) {
   );
 }
 
-test("El alta guarda un usuario pendiente y normaliza sus datos", () => {
+test("El alta guarda un usuario pendiente y normaliza sus datos", async () => {
   const logica = crearLogica();
 
-  const usuario = logica.alta({
+  const usuario = await logica.alta({
     nombre: "  Ana  ",
     email: "  ANA@example.com  "
   });
@@ -32,134 +32,134 @@ test("El alta guarda un usuario pendiente y normaliza sus datos", () => {
   assert.equal(usuario.email, "ana@example.com");
   assert.equal(usuario.confirmado, false);
   assert.equal(usuario.eliminado, false);
-  assert.deepEqual(logica.obtener(usuario.id), usuario);
-  assert.equal(logica.estaActivo(usuario.id), false);
+  assert.deepEqual((await logica.obtener(usuario.id)), usuario);
+  assert.equal((await logica.estaActivo(usuario.id)), false);
 });
 
-test("El alta rechaza un nombre vacío", () => {
+test("El alta rechaza un nombre vacío", async () => {
   const logica = crearLogica();
 
-  comprobarError(
-    () => logica.alta({ nombre: " ", email: "ana@example.com" }),
+  await comprobarError(
+    async () => await logica.alta({ nombre: " ", email: "ana@example.com" }),
     "NOMBRE_INVALIDO"
   );
 
-  assert.deepEqual(logica.listar(), []);
+  assert.deepEqual((await logica.listar()), []);
 });
 
-test("El alta rechaza un correo inválido", () => {
+test("El alta rechaza un correo inválido", async () => {
   const logica = crearLogica();
 
-  comprobarError(
-    () => logica.alta({ nombre: "Ana", email: "correo-invalido" }),
+  await comprobarError(
+    async () => await logica.alta({ nombre: "Ana", email: "correo-invalido" }),
     "EMAIL_INVALIDO"
   );
 
-  assert.deepEqual(logica.listar(), []);
+  assert.deepEqual((await logica.listar()), []);
 });
 
-test("No admite correos duplicados aunque cambien mayúsculas o espacios", () => {
+test("No admite correos duplicados aunque cambien mayúsculas o espacios", async () => {
   const logica = crearLogica();
 
-  logica.alta({ nombre: "Ana", email: "ana@example.com" });
+  await logica.alta({ nombre: "Ana", email: "ana@example.com" });
 
-  comprobarError(
-    () => logica.alta({
+  await comprobarError(
+    async () => await logica.alta({
       nombre: "Otra Ana",
       email: " ANA@EXAMPLE.COM "
     }),
     "EMAIL_DUPLICADO"
   );
 
-  assert.equal(logica.listar().length, 1);
+  assert.equal((await logica.listar()).length, 1);
 });
 
-test("El listado devuelve los usuarios registrados", () => {
+test("El listado devuelve los usuarios registrados", async () => {
   const logica = crearLogica();
-  assert.deepEqual(logica.listar(), []);
+  assert.deepEqual((await logica.listar()), []);
 
-  const ana = logica.alta({
+  const ana = await logica.alta({
     nombre: "Ana",
     email: "ana@example.com"
   });
 
-  const luis = logica.alta({
+  const luis = await logica.alta({
     nombre: "Luis",
     email: "luis@example.com"
   });
 
-  assert.deepEqual(logica.listar(), [ana, luis]);
+  assert.deepEqual((await logica.listar()), [ana, luis]);
 });
 
-test("Un usuario confirmado pasa a estar activo", () => {
+test("Un usuario confirmado pasa a estar activo", async () => {
   const logica = crearLogica();
-  const usuario = logica.alta({
+  const usuario = await logica.alta({
     nombre: "Ana",
     email: "ana@example.com"
   });
 
-  logica.confirmar(usuario.id);
+  (await logica.confirmar(usuario.id));
 
-  assert.equal(logica.estaActivo(usuario.id), true);
+  assert.equal((await logica.estaActivo(usuario.id)), true);
 });
 
-test("Eliminar un usuario lo desactiva y lo excluye del listado", () => {
+test("Eliminar un usuario lo desactiva y lo excluye del listado", async () => {
   const logica = crearLogica();
-  const usuario = logica.alta({
+  const usuario = await logica.alta({
     nombre: "Ana",
     email: "ana@example.com"
   });
 
-  logica.confirmar(usuario.id);
-  logica.eliminar(usuario.id);
+  (await logica.confirmar(usuario.id));
+  (await logica.eliminar(usuario.id));
 
-  assert.equal(logica.estaActivo(usuario.id), false);
-  assert.equal(logica.obtener(usuario.id).eliminado, true);
-  assert.deepEqual(logica.listar(), []);
+  assert.equal((await logica.estaActivo(usuario.id)), false);
+  assert.equal((await logica.obtener(usuario.id)).eliminado, true);
+  assert.deepEqual((await logica.listar()), []);
 });
 
-test("Consultar el estado o eliminar un usuario inexistente produce un error", () => {
+test("Consultar el estado o eliminar un usuario inexistente produce un error", async () => {
   const logica = crearLogica();
 
-  comprobarError(
-    () => logica.estaActivo("no-existe"),
+  await comprobarError(
+    async () => (await logica.estaActivo("no-existe")),
     "USUARIO_NO_ENCONTRADO"
   );
 
-  comprobarError(
-    () => logica.eliminar("no-existe"),
+  await comprobarError(
+    async () => (await logica.eliminar("no-existe")),
     "USUARIO_NO_ENCONTRADO"
   );
 });
 
-test("No se puede confirmar un usuario eliminado", () => {
+test("No se puede confirmar un usuario eliminado", async () => {
   const logica = crearLogica();
-  const usuario = logica.alta({
+  const usuario = await logica.alta({
     nombre: "Ana",
     email: "ana@example.com"
   });
 
-  logica.eliminar(usuario.id);
+  (await logica.eliminar(usuario.id));
 
-  comprobarError(
-    () => logica.confirmar(usuario.id),
+  await comprobarError(
+    async () => (await logica.confirmar(usuario.id)),
     "USUARIO_ELIMINADO"
   );
 
-  assert.equal(logica.estaActivo(usuario.id), false);
+  assert.equal((await logica.estaActivo(usuario.id)), false);
 });
 
-test("Modificar un objeto devuelto no altera los datos almacenados", () => {
+test("Modificar un objeto devuelto no altera los datos almacenados", async () => {
   const logica = crearLogica();
-  const usuario = logica.alta({
+  const usuario = await logica.alta({
     nombre: "Ana",
     email: "ana@example.com"
   });
 
   usuario.confirmado = true;
-  const listado = logica.listar();
+  const listado = (await logica.listar());
   listado[0].nombre = "Nombre modificado";
 
-  assert.equal(logica.estaActivo(usuario.id), false);
-  assert.equal(logica.obtener(usuario.id).nombre, "Ana");
+  assert.equal((await logica.estaActivo(usuario.id)), false);
+  assert.equal((await logica.obtener(usuario.id)).nombre, "Ana");
 });

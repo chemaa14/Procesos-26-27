@@ -178,18 +178,19 @@ function comprobarCabeceraCliente(peticion) {
   }
 }
 
-export function crearAplicacion({ tokenAdmin = process.env.API_ADMIN_TOKEN || "",
-  cookieSegura = process.env.NODE_ENV === "production"
+export function crearAplicacion({  tokenAdmin = process.env.API_ADMIN_TOKEN || "",
+  cookieSegura = process.env.NODE_ENV === "production",
+  datos = new DatosUsuarios()
 } = {})
  {
-  const datos = new DatosUsuarios();
+
   const logica = new LogicaUsuarios(datos);
 
   const sesiones = new Sesiones({
   duracionMs: DURACION_SESION_SEGUNDOS * 1000
 });
 
-function exigirUsuario(peticion) {
+async function exigirUsuario(peticion) {
   const token = leerTokenSesion(peticion);
   const sesion = sesiones.obtener(token);
 
@@ -197,7 +198,7 @@ function exigirUsuario(peticion) {
     throw new ErrorHTTP(401, "Se requiere una sesión válida.");
   }
 
-  const usuario = datos.buscarPorId(sesion.usuarioId);
+  const usuario = await datos.buscarPorId(sesion.usuarioId);
 
   if (!usuario || !usuario.confirmado || usuario.eliminado) {
     sesiones.eliminarDeUsuario(sesion.usuarioId);
@@ -272,7 +273,7 @@ function exigirUsuario(peticion) {
             return metodoNoPermitido(respuesta, "GET");
           }
 
-          const usuario = exigirUsuario(peticion);
+          const usuario = await exigirUsuario(peticion);
 
           return responderJSON(respuesta, 200, { usuario });
         }
@@ -296,7 +297,7 @@ function exigirUsuario(peticion) {
 
         if (ruta === "/api/perfil") {
           // La identidad se obtiene de la sesión, nunca del cliente.
-          const usuario = exigirUsuario(peticion);
+          const usuario = await exigirUsuario(peticion);
 
           if (metodo === "GET") {
             return responderJSON(respuesta, 200, { usuario });
@@ -305,7 +306,7 @@ function exigirUsuario(peticion) {
           if (metodo === "DELETE") {
             comprobarCabeceraCliente(peticion);
 
-            logica.eliminar(usuario.id);
+            await logica.eliminar(usuario.id);
 
             // Invalida todas las sesiones de esta cuenta.
             sesiones.eliminarDeUsuario(usuario.id);
@@ -339,7 +340,7 @@ function exigirUsuario(peticion) {
         if (ruta === "/api/usuarios") {
           if (metodo === "GET") {
             return responderJSON(respuesta, 200, {
-              usuarios: logica.listar()
+              usuarios: await logica.listar()
             });
           }
 
@@ -347,7 +348,7 @@ function exigirUsuario(peticion) {
             const contenido = await leerJSON(peticion);
 
             // Solo admitimos los campos necesarios para el alta.
-            const usuario = logica.alta({
+            const usuario = await logica.alta({
               nombre: contenido.nombre,
               email: contenido.email
             });
@@ -364,7 +365,7 @@ function exigirUsuario(peticion) {
           }
 
           return responderJSON(respuesta, 200, {
-            activo: logica.estaActivo(rutaActivo[1])
+            activo: await logica.estaActivo(rutaActivo[1])
           });
         }
 
@@ -372,7 +373,7 @@ function exigirUsuario(peticion) {
           return metodoNoPermitido(respuesta, "DELETE");
         }
 
-        logica.eliminar(rutaUsuario[1]);
+        await logica.eliminar(rutaUsuario[1]);
         sesiones.eliminarDeUsuario(rutaUsuario[1]);
         
         respuesta.writeHead(204, { "Cache-Control": "no-store" });

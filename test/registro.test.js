@@ -26,9 +26,9 @@ test("registra un usuario pendiente y almacena su hash por separado", async () =
   assert.equal(usuario.nombre, "Ana");
   assert.equal(usuario.email, "ana@example.com");
   assert.equal(usuario.confirmado, false);
-  assert.equal(logica.estaActivo(usuario.id), false);
+  assert.equal((await logica.estaActivo(usuario.id)), false);
 
-  const hash = datos.buscarHashPassword(usuario.id);
+  const hash = (await datos.buscarHashPassword(usuario.id));
 
   assert.equal(typeof hash, "string");
   assert.notEqual(hash, PASSWORD);
@@ -37,11 +37,11 @@ test("registra un usuario pendiente y almacena su hash por separado", async () =
   // Ninguna consulta de usuarios debe devolver credenciales.
   for (const resultado of [
     usuario,
-    logica.obtener(usuario.id),
-    ...logica.listar(),
-    datos.buscarPorId(usuario.id),
-    datos.buscarPorEmail(usuario.email),
-    ...datos.listar()
+    (await logica.obtener(usuario.id)),
+    ...(await logica.listar()),
+    (await datos.buscarPorId(usuario.id)),
+    (await datos.buscarPorEmail(usuario.email)),
+    ...(await datos.listar())
   ]) {
     assert.deepEqual(
       Object.keys(resultado).sort(),
@@ -62,7 +62,7 @@ test("rechaza una contraseña inválida sin crear el usuario", async () => {
     { codigo: "PASSWORD_INVALIDA" }
   );
 
-  assert.deepEqual(logica.listar(), []);
+  assert.deepEqual((await logica.listar()), []);
 });
 
 test("rechaza un registro duplicado sin cambiar la contraseña original", async () => {
@@ -74,7 +74,7 @@ test("rechaza un registro duplicado sin cambiar la contraseña original", async 
     password: PASSWORD
   });
 
-  const hashOriginal = datos.buscarHashPassword(usuario.id);
+  const hashOriginal = (await datos.buscarHashPassword(usuario.id));
 
   await assert.rejects(
     () => logica.registrar({
@@ -85,9 +85,9 @@ test("rechaza un registro duplicado sin cambiar la contraseña original", async 
     { codigo: "EMAIL_DUPLICADO" }
   );
 
-  assert.equal(logica.listar().length, 1);
+  assert.equal((await logica.listar()).length, 1);
   assert.equal(
-    datos.buscarHashPassword(usuario.id),
+    (await datos.buscarHashPassword(usuario.id)),
     hashOriginal
   );
 });

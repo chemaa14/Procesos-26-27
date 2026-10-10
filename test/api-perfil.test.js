@@ -39,7 +39,7 @@ async function crearUsuario(logica, email = "ana@example.com") {
     password: PASSWORD
   });
 
-  logica.confirmar(usuario.id);
+  (await logica.confirmar(usuario.id));
 
   return usuario;
 }
@@ -122,7 +122,7 @@ test("consultar o eliminar el perfil requiere una sesión válida", async () => 
       }
     }
 
-    assert.equal(logica.estaActivo(usuario.id), true);
+    assert.equal((await logica.estaActivo(usuario.id)), true);
   });
 });
 
@@ -152,9 +152,9 @@ test("eliminar el perfil revoca todas sus sesiones y borra la cookie", async () 
       /;\s*Max-Age=0(?:;|$)/
     );
 
-    assert.equal(logica.obtener(usuario.id).eliminado, true);
-    assert.equal(logica.estaActivo(usuario.id), false);
-    assert.deepEqual(logica.listar(), []);
+    assert.equal((await logica.obtener(usuario.id)).eliminado, true);
+    assert.equal((await logica.estaActivo(usuario.id)), false);
+    assert.deepEqual((await logica.listar()), []);
 
     for (const cookie of [primeraCookie, segundaCookie]) {
       await comprobarEstado(base, "/api/perfil", cookie, 401);
@@ -176,7 +176,7 @@ test("rechaza la eliminación sin cabecera de protección y conserva la cuenta",
     assert.equal(respuesta.status, 403);
     await respuesta.json();
 
-    assert.equal(logica.estaActivo(usuario.id), true);
+    assert.equal((await logica.estaActivo(usuario.id)), true);
     await comprobarEstado(base, "/api/perfil", cookie, 200);
   });
 });
@@ -204,8 +204,8 @@ test("un identificador en la URL no permite eliminar otra cuenta desde el perfil
     await respuesta.text();
 
     // La identidad procede de la sesión, no del parámetro id.
-    assert.equal(logica.obtener(ana.id).eliminado, true);
-    assert.equal(logica.estaActivo(otro.id), true);
+    assert.equal((await logica.obtener(ana.id)).eliminado, true);
+    assert.equal((await logica.estaActivo(otro.id)), true);
 
     await comprobarEstado(base, "/api/perfil", cookieOtro, 200);
   });
@@ -231,8 +231,8 @@ test("una sesión normal no autoriza a eliminar otra cuenta por la ruta administ
     assert.equal(respuesta.status, 401);
     await respuesta.json();
 
-    assert.equal(logica.estaActivo(ana.id), true);
-    assert.equal(logica.estaActivo(otro.id), true);
+    assert.equal((await logica.estaActivo(ana.id)), true);
+    assert.equal((await logica.estaActivo(otro.id)), true);
   });
 });
 
@@ -254,7 +254,7 @@ test("la eliminación administrativa también impide usar las sesiones de la cue
     assert.equal(respuesta.status, 204);
     await respuesta.text();
 
-    assert.equal(logica.obtener(usuario.id).eliminado, true);
+    assert.equal((await logica.obtener(usuario.id)).eliminado, true);
     await comprobarEstado(base, "/api/perfil", cookie, 401);
     await comprobarEstado(base, "/api/sesion", cookie, 401);
   });
@@ -277,6 +277,6 @@ test("el perfil rechaza métodos no permitidos sin modificar la cuenta", async (
     assert.equal(respuesta.headers.get("allow"), "GET, DELETE");
     await respuesta.json();
 
-    assert.equal(logica.estaActivo(usuario.id), true);
+    assert.equal((await logica.estaActivo(usuario.id)), true);
   });
 });

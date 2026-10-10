@@ -39,7 +39,7 @@ async function crearUsuario(logica, confirmado = true) {
   });
 
   if (confirmado) {
-    logica.confirmar(usuario.id);
+    (await logica.confirmar(usuario.id));
   }
 
   return usuario;
@@ -204,7 +204,7 @@ test("eliminar un usuario invalida su acceso y evita nuevos logins", async () =>
     const cookie = extraerCookie(acceso);
     await acceso.json();
 
-    logica.eliminar(usuario.id);
+    (await logica.eliminar(usuario.id));
 
     await comprobarSesion(base, cookie, 401);
 

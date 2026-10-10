@@ -58,7 +58,7 @@ test("el registro público crea una cuenta pendiente sin devolver credenciales",
     assert.equal(usuario.email, "ana@example.com");
     assert.equal(usuario.confirmado, false);
     assert.equal(usuario.eliminado, false);
-    assert.equal(logica.estaActivo(usuario.id), false);
+    assert.equal((await logica.estaActivo(usuario.id)), false);
 
     assert.deepEqual(
       Object.keys(usuario).sort(),
@@ -80,7 +80,7 @@ test("el registro responde 400 ante una contraseña inválida", async () => {
     const cuerpo = await respuesta.json();
 
     assert.equal(cuerpo.codigo, "PASSWORD_INVALIDA");
-    assert.deepEqual(logica.listar(), []);
+    assert.deepEqual((await logica.listar()), []);
   });
 });
 
@@ -106,6 +106,6 @@ test("el registro responde 409 cuando el correo ya existe", async () => {
     const cuerpo = await duplicada.json();
 
     assert.equal(cuerpo.codigo, "EMAIL_DUPLICADO");
-    assert.equal(logica.listar().length, 1);
+    assert.equal((await logica.listar()).length, 1);
   });
 });

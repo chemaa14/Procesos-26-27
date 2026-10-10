@@ -175,3 +175,69 @@ Validación: 67 pruebas automáticas superadas.
 Comprobaciones manuales: cancelar la eliminación conserva la cuenta;
 confirmarla cierra la sesión; recargar mantiene la sesión cerrada;
 intentar acceder de nuevo con la cuenta eliminada se rechaza.
+
+## Persistencia con PostgreSQL
+
+La aplicación dispone de dos implementaciones de la capa de datos:
+memoria para las pruebas existentes y PostgreSQL para almacenamiento
+persistente. Ambas utilizan un contrato asíncrono común.
+
+Los usuarios y sus hashes sobreviven al reinicio. El registro guarda
+el usuario y su hash en una sola operación. Las consultas públicas
+no devuelven el hash.
+
+### Ejecución local con PostgreSQL
+
+Requisitos: Node.js 24 y Docker con Docker Compose.
+
+1. Ejecutar `npm ci`.
+2. Crear un archivo `.env` en la raíz con esta configuración:
+
+```dotenv
+DB_HOST=127.0.0.1
+DB_PORT=5433
+DB_NAME=cinematch
+DB_USER=cinematch
+DB_PASSWORD=REEMPLAZAR_POR_UNA_CLAVE_LOCAL
+```
+
+3. Arrancar PostgreSQL:
+
+```powershell
+docker compose up -d --wait
+```
+
+4. Crear la tabla:
+
+```powershell
+Get-Content -Raw -Encoding UTF8 .\sql\001-usuarios.sql | docker compose exec -T db psql -U cinematch -d cinematch -v ON_ERROR_STOP=1
+```
+
+5. Arrancar la aplicación:
+
+```powershell
+npm run start:postgres
+```
+
+El archivo `.env` está excluido de Git.
+
+### Pruebas
+
+- `npm test`: 67 pruebas existentes.
+- `npm run test:postgres`: una prueba de integración con PostgreSQL.
+  Requiere la base de datos arrancada y la tabla creada.
+
+El workflow configura PostgreSQL temporalmente en GitHub Actions
+y ejecuta ambos grupos de pruebas.
+
+Se ha comprobado manualmente que una cuenta sigue almacenada tras
+reiniciar la aplicación y PostgreSQL.
+
+### Estado del despliegue
+
+`npm start` mantiene el almacenamiento en memoria.
+`npm run start:postgres` utiliza PostgreSQL.
+
+La conexión del despliegue público a PostgreSQL queda pendiente
+para la siguiente rama. Las sesiones continúan en memoria y se
+invalidan al reiniciar la aplicación.

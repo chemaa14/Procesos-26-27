@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, hito1/ci-cd]
+    branches: [main, hito1/ci-cd, hito3/persistencia]
 
 permissions:
   contents: read
@@ -12,6 +12,29 @@ permissions:
 jobs:
   pruebas:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: cinematch_test
+          POSTGRES_USER: cinematch
+          POSTGRES_PASSWORD: clave-ficticia-solo-para-ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cinematch -d cinematch_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: cinematch_test
+      DB_USER: cinematch
+      DB_PASSWORD: clave-ficticia-solo-para-ci
 
     steps:
       - name: Descargar el código
@@ -20,8 +43,20 @@ jobs:
       - name: Preparar Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '24'
+          node-version: "24"
           package-manager-cache: false
 
-      - name: Ejecutar las pruebas
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Crear las tablas de pruebas
+        run: |
+          docker exec -i "${{ job.services.postgres.id }}" \
+            psql -U cinematch -d cinematch_test -v ON_ERROR_STOP=1 \
+            < sql/001-usuarios.sql
+
+      - name: Ejecutar las pruebas existentes
         run: npm test
+
+      - name: Ejecutar la prueba de PostgreSQL
+        run: npm run test:postgres
