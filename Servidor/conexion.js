@@ -1,6 +1,7 @@
+import { crearRegistroActividad } from "./actividad.js";
 import pg from "pg";
 
-export function crearPool() {
+export function crearPool({ registrarActividad = crearRegistroActividad() } = {}) {
   const variables = [
     "DB_HOST",
     "DB_PORT",
@@ -11,14 +12,14 @@ export function crearPool() {
 
   for (const variable of variables) {
     if (!process.env[variable]) {
-      throw new Error(`Falta la variable de entorno ${variable}.`);
+      throw Object.assign(new Error(`Falta la variable de entorno ${variable}.`), { code: "CONFIGURACION_INVALIDA" });
     }
   }
 
   const puerto = Number(process.env.DB_PORT);
 
   if (!Number.isInteger(puerto) || puerto < 1 || puerto > 65535) {
-    throw new Error("DB_PORT debe ser un puerto válido.");
+    throw Object.assign(new Error("DB_PORT debe ser un puerto válido."), { code: "CONFIGURACION_INVALIDA" });
   }
 
   const pool = new pg.Pool({
@@ -32,8 +33,8 @@ export function crearPool() {
     idleTimeoutMillis: 30000
   });
 
-  pool.on("error", () => {
-    console.error("Error en una conexión inactiva de PostgreSQL.");
+  pool.on("error", error => {
+    registrarActividad("error_postgres", { codigo: error?.code });
   });
 
   return pool;

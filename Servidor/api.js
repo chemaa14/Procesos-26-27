@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { crearRegistroActividad, rutaParaRegistro } from "./actividad.js";
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -155,7 +157,8 @@ function comprobarCabeceraCliente(peticion) {
 
 export function crearAplicacion({
   cookieSegura = process.env.NODE_ENV === "production",
-  datos = new DatosUsuarios()
+  datos = new DatosUsuarios(),
+  registrarActividad = crearRegistroActividad()
 } = {})
  {
 
@@ -191,10 +194,37 @@ async function exigirUsuario(peticion) {
 
   const servidor = createServer(async (peticion, respuesta) => {
     respuesta.setHeader("X-Content-Type-Options", "nosniff");
+    const inicio = performance.now();
+    const actividad = { solicitudId: randomUUID(), metodo: peticion.method, ruta: "otra" };
+    let evento = "peticion_http";
+    let registrado = false;
+    respuesta.setHeader("X-Request-Id", actividad.solicitudId);
+
+    function finalizar(interrumpida = false) {
+      if (registrado) return;
+      registrado = true;
+      const estado = respuesta.statusCode;
+      let resultado = evento;
+      if (interrumpida) resultado = "peticion_interrumpida";
+      else if (estado >= 500) resultado = "error_interno";
+      else if (actividad.ruta === "/api/login" && estado === 401) resultado = "login_rechazado";
+      else if (estado === 401 || estado === 403) resultado = "acceso_denegado";
+      else if (estado >= 400) resultado = "peticion_rechazada";
+      try {
+        registrarActividad(resultado, {
+          ...actividad,
+          ...(interrumpida ? {} : { estado }),
+          duracionMs: performance.now() - inicio
+        });
+      } catch { /* Un destino inyectado tampoco debe romper el servidor. */ }
+    }
+    respuesta.once("finish", () => finalizar());
+    respuesta.once("close", () => { if (!respuesta.writableFinished) finalizar(true); });
 
     try {
       const url = new URL(peticion.url, "http://localhost");
       const ruta = url.pathname;
+      actividad.ruta = rutaParaRegistro(ruta);
       const metodo = peticion.method;
 
       if (ruta === "/api/health") {
@@ -221,6 +251,8 @@ async function exigirUsuario(peticion) {
             password: cuerpo.password
           });
 
+          evento = "usuario_registrado";
+          actividad.objetivoId = usuario.id;
           return responderJSON(respuesta, 201, { usuario });
         }
 
@@ -245,6 +277,8 @@ async function exigirUsuario(peticion) {
           const token = sesiones.crear(usuario.id);
 
           escribirCookieSesion(respuesta, token, cookieSegura);
+          evento = "login_correcto";
+          actividad.usuarioId = usuario.id;
 
           return responderJSON(respuesta, 200, { usuario });
         }
@@ -255,6 +289,7 @@ async function exigirUsuario(peticion) {
           }
 
           const usuario = await exigirUsuario(peticion);
+          actividad.usuarioId = usuario.id;
 
           return responderJSON(respuesta, 200, { usuario });
         }
@@ -266,6 +301,9 @@ async function exigirUsuario(peticion) {
 
           comprobarCabeceraCliente(peticion);
 
+          const sesionActual = sesiones.obtener(leerTokenSesion(peticion));
+          actividad.usuarioId = sesionActual?.usuarioId;
+          evento = "logout";
           sesiones.eliminar(leerTokenSesion(peticion));
           escribirCookieSesion(respuesta, null, cookieSegura);
 
@@ -279,6 +317,7 @@ async function exigirUsuario(peticion) {
         if (ruta === "/api/perfil") {
           // La identidad se obtiene de la sesión, nunca del cliente.
           const usuario = await exigirUsuario(peticion);
+          actividad.usuarioId = usuario.id;
 
           if (metodo === "GET") {
             return responderJSON(respuesta, 200, { usuario });
@@ -288,6 +327,8 @@ async function exigirUsuario(peticion) {
             comprobarCabeceraCliente(peticion);
 
             await logica.eliminarConPermisos(usuario.id, usuario.id);
+            evento = "usuario_eliminado";
+            actividad.objetivoId = usuario.id;
 
             // Invalida todas las sesiones de esta cuenta.
             sesiones.eliminarDeUsuario(usuario.id);
@@ -315,6 +356,7 @@ async function exigirUsuario(peticion) {
 
       if (ruta === "/api/usuarios" || rutaActivo || rutaUsuario) {
         const actor = await exigirUsuario(peticion);
+        actividad.usuarioId = actor.id;
         // DELETE permite cuenta propia o administrador. El resto requiere admin.
         if (!(rutaUsuario && metodo === "DELETE")) {
           exigirAdministrador(actor);
@@ -324,9 +366,9 @@ async function exigirUsuario(peticion) {
 
         if (ruta === "/api/usuarios") {
           if (metodo === "GET") {
-            return responderJSON(respuesta, 200, {
-              usuarios: await logica.listar()
-            });
+            const usuarios = await logica.listar();
+            evento = "usuarios_listados";
+            return responderJSON(respuesta, 200, { usuarios });
           }
 
           if (metodo === "POST") {
@@ -339,6 +381,8 @@ async function exigirUsuario(peticion) {
               email: contenido.email
             });
 
+            evento = "usuario_creado";
+            actividad.objetivoId = usuario.id;
             return responderJSON(respuesta, 201, { usuario });
           }
 
@@ -350,9 +394,10 @@ async function exigirUsuario(peticion) {
             return metodoNoPermitido(respuesta, "GET");
           }
 
-          return responderJSON(respuesta, 200, {
-            activo: await logica.estaActivo(rutaActivo[1])
-          });
+          const activo = await logica.estaActivo(rutaActivo[1]);
+          evento = "estado_consultado";
+          actividad.objetivoId = rutaActivo[1];
+          return responderJSON(respuesta, 200, { activo });
         }
 
         if (metodo !== "DELETE") {
@@ -361,6 +406,8 @@ async function exigirUsuario(peticion) {
 
         comprobarCabeceraCliente(peticion);
         await logica.eliminarConPermisos(rutaUsuario[1], actor.id);
+        evento = "usuario_eliminado";
+        actividad.objetivoId = rutaUsuario[1];
         if (actor.id === rutaUsuario[1]) {
           escribirCookieSesion(respuesta, null, cookieSegura);
         }
@@ -392,6 +439,7 @@ async function exigirUsuario(peticion) {
 
       respuesta.end(contenido);
     } catch (error) {
+      actividad.codigo = error?.codigo ?? error?.code;
       if (respuesta.destroyed || respuesta.writableEnded) return;
 
       if (error instanceof ErrorHTTP) {
@@ -427,8 +475,6 @@ async function exigirUsuario(peticion) {
         });
       }
 
-      console.error("Error interno al procesar una petición.");
-
       responderJSON(respuesta, 500, {
         error: "Error interno del servidor."
       });
@@ -449,6 +495,6 @@ if (
   const { servidor } = crearAplicacion();
 
   servidor.listen(puerto, host, () => {
-    console.log(`CineMatch iniciado en el puerto ${puerto}`);
+    crearRegistroActividad()("servidor_memoria_iniciado", { puerto });
   });
 }

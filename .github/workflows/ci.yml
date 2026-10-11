@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, hito1/ci-cd, hito3/persistencia, hito3/roles-permisos]
+    branches: [main, hito1/ci-cd, hito3/persistencia, hito3/roles-permisos, hito3/logs-actividad]
 
 permissions:
   contents: read
