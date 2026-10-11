@@ -60,6 +60,11 @@
       outline-offset: 3px;
     }
 
+    .tabla-usuarios { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+    td button { margin-top: 0; }
+
     .error {
       color: #a01515;
     }
@@ -151,8 +156,26 @@
     <section id="panel-usuario" aria-labelledby="bienvenida" hidden>
       <h2 id="bienvenida" tabindex="-1"></h2>
       <p id="correo-usuario"></p>
+      <p id="rol-usuario"></p>
       <button id="cerrar-sesion" type="button">Cerrar sesión</button>
       <button id="eliminar-cuenta" type="button"> Eliminar mi cuenta</button>
+    </section>
+
+    <section id="panel-admin" aria-labelledby="titulo-admin" hidden>
+      <h2 id="titulo-admin">Administración de usuarios</h2>
+      <button id="actualizar-usuarios" type="button">Actualizar listado</button>
+      <p id="estado-listado" role="status" aria-live="polite"></p>
+      <div class="tabla-usuarios">
+        <table>
+          <caption>Usuarios no eliminados</caption>
+          <thead><tr>
+            <th scope="col">Nombre</th><th scope="col">Correo</th>
+            <th scope="col">Rol</th><th scope="col">Estado</th>
+            <th scope="col">Acciones</th>
+          </tr></thead>
+          <tbody id="lista-usuarios"></tbody>
+        </table>
+      </div>
     </section>
 
     <noscript>

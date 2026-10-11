@@ -13,6 +13,7 @@ test("PostgreSQL conserva el usuario y su hash entre conexiones", async () => {
     id,
     nombre: "Prueba automática",
     email: `prueba-${id}@example.com`,
+    rol: "usuario",
     confirmado: false,
     eliminado: false
   };
@@ -57,7 +58,7 @@ test("PostgreSQL conserva el usuario y su hash entre conexiones", async () => {
     assert.equal(await datos.buscarHashPassword(id), hash);
 
     // Actualizar el estado debe conservar la contraseña.
-    const confirmado = { ...usuario, confirmado: true };
+    const confirmado = { ...usuario, confirmado: true, rol: "administrador" };
     await datos.guardar(confirmado);
 
     assert.equal(await datos.buscarHashPassword(id), hash);
@@ -69,6 +70,13 @@ test("PostgreSQL conserva el usuario y su hash entre conexiones", async () => {
 
     assert.deepEqual(await datos.buscarPorId(id), confirmado);
     assert.equal(await datos.buscarHashPassword(id), hash);
+
+    // La restricción impide guardar roles desconocidos.
+    await assert.rejects(
+      datos.guardar({ ...confirmado, rol: "superadmin" }),
+      { code: "23514" }
+    );
+    assert.deepEqual(await datos.buscarPorId(id), confirmado);
 
     // La eliminación lógica también queda guardada.
     const eliminado = { ...confirmado, eliminado: true };

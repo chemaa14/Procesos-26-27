@@ -8,7 +8,7 @@ let servidor;
 
 try {
   // Comprueba la conexión y que la tabla está preparada.
-  await pool.query("SELECT id FROM usuarios LIMIT 0");
+  await pool.query("SELECT id, rol FROM usuarios LIMIT 0");
 
   const datos = new DatosUsuariosPostgres(pool);
   const aplicacion = crearAplicacion({ datos });

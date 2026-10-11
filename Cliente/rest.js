@@ -123,3 +123,13 @@ export function eliminarMiCuenta() {
     metodo: "DELETE"
   });
 }
+
+export async function listarUsuarios() {
+  return (await realizarPeticion("/api/usuarios")).usuarios;
+}
+
+export function eliminarUsuario(id) {
+  return realizarPeticion(`/api/usuarios/${encodeURIComponent(id)}`, {
+    metodo: "DELETE"
+  });
+}

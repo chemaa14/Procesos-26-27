@@ -4,7 +4,9 @@ import {
   iniciarSesion,
   obtenerSesion,
   cerrarSesion,
-  eliminarMiCuenta
+  eliminarMiCuenta,
+  listarUsuarios,
+  eliminarUsuario
 } from "./rest.js";
 
 
@@ -22,6 +24,12 @@ const botonSalir = document.getElementById("cerrar-sesion");
 const botonReintentar = document.getElementById("reintentar");
 const botonEliminar = document.getElementById("eliminar-cuenta");
 
+const panelAdmin = document.getElementById("panel-admin");
+const rolUsuario = document.getElementById("rol-usuario");
+const listaUsuarios = document.getElementById("lista-usuarios");
+const estadoListado = document.getElementById("estado-listado");
+const botonActualizar = document.getElementById("actualizar-usuarios");
+let usuarioActual = null;
 let ocupado = false;
 
 function mostrarMensaje(texto, esError = false) {
@@ -41,6 +49,11 @@ function cambiarOcupado(valor) {
 }
 
 function mostrarUsuario(usuario) {
+  usuarioActual = usuario;
+  panelAdmin.hidden = usuario?.rol !== "administrador";
+  rolUsuario.textContent = usuario ? `Rol: ${usuario.rol}` : "";
+  listaUsuarios.replaceChildren();
+  estadoListado.textContent = "";
   acceso.hidden = Boolean(usuario);
   panelUsuario.hidden = !usuario;
 
@@ -80,6 +93,7 @@ async function recuperarSesion() {
   try {
     const usuario = await obtenerSesion();
     mostrarUsuario(usuario);
+    if (usuario?.rol === "administrador") await cargarUsuarios();
   } catch (error) {
     estadoSesion.textContent = "No se pudo comprobar la sesión.";
     mostrarMensaje(error.message, true);
@@ -133,7 +147,8 @@ formLogin.addEventListener("submit", async evento => {
 
     formLogin.reset();
     mostrarUsuario(usuario);
-    mostrarMensaje("Has iniciado sesión correctamente.");
+    if (usuario?.rol === "administrador") await cargarUsuarios();
+    if (usuarioActual) mostrarMensaje("Has iniciado sesión correctamente.");
     bienvenida.focus();
   } catch (error) {
     mostrarMensaje(error.message, true);
@@ -219,6 +234,74 @@ botonEliminar.addEventListener("click", async () => {
   if (volverAlAcceso) {
     document.getElementById("login-email").focus();
   }
+});
+
+async function cargarUsuarios() {
+  listaUsuarios.replaceChildren();
+  estadoListado.textContent = "Cargando usuarios...";
+  try {
+    const usuarios = await listarUsuarios();
+    for (const usuario of usuarios) {
+      const fila = document.createElement("tr");
+      for (const valor of [usuario.nombre, usuario.email, usuario.rol,
+        usuario.confirmado && !usuario.eliminado ? "Activo" : "Pendiente"]) {
+        const celda = document.createElement("td");
+        celda.textContent = valor;
+        fila.append(celda);
+      }
+      const acciones = document.createElement("td");
+      if (usuario.id === usuarioActual.id) {
+        acciones.textContent = "Tu cuenta (usa Eliminar mi cuenta)";
+      } else {
+        const boton = document.createElement("button");
+        boton.type = "button";
+        boton.textContent = "Eliminar";
+        boton.setAttribute("aria-label", `Eliminar a ${usuario.email}`);
+        boton.disabled = ocupado;
+        boton.addEventListener("click", () => borrarUsuario(usuario));
+        acciones.append(boton);
+      }
+      fila.append(acciones);
+      listaUsuarios.append(fila);
+    }
+    estadoListado.textContent = `${usuarios.length} usuarios.`;
+  } catch (error) {
+    estadoListado.textContent = error.message;
+    if (error.estado === 401) mostrarUsuario(null);
+    if (error.estado === 403) {
+      panelAdmin.hidden = true;
+      listaUsuarios.replaceChildren();
+      // Refresca el rol mostrado si cambió durante la sesión.
+      try { mostrarUsuario(await obtenerSesion()); } catch { /* permite reintentar */ }
+    }
+    mostrarMensaje(error.message, true);
+  }
+}
+
+async function borrarUsuario(usuario) {
+  if (ocupado) return;
+  if (!window.confirm(`¿Eliminar la cuenta de ${usuario.email}? Se cerrarán sus sesiones y perderá el acceso.`)) return;
+  cambiarOcupado(true);
+  try {
+    await eliminarUsuario(usuario.id);
+    mostrarMensaje("Usuario eliminado.");
+    await cargarUsuarios();
+  } catch (error) {
+    if (error.estado === 401) mostrarUsuario(null);
+    if (error.estado === 403) {
+      panelAdmin.hidden = true;
+      listaUsuarios.replaceChildren();
+    }
+    mostrarMensaje(error.message, true);
+  } finally {
+    cambiarOcupado(false);
+  }
+}
+
+botonActualizar.addEventListener("click", async () => {
+  if (ocupado) return;
+  cambiarOcupado(true);
+  try { await cargarUsuarios(); } finally { cambiarOcupado(false); }
 });
 
 comprobarServidor();

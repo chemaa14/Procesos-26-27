@@ -1,197 +1,44 @@
-# Procesos-26-27
+# CineMatch — Procesos-26-27
 
-Proyecto para la asignatura Procesos de la ingenieria del software.
+Proyecto de Procesos de la Ingeniería del Software. Sprint 1: arquitectura base.
 
-Bienvenidos al proyecto
+## Estado actual
 
+La aplicación permite registrar cuentas pendientes, iniciar y cerrar sesión,
+consultar el perfil y eliminar la propia cuenta. Los usuarios y sus hashes se
+guardan en PostgreSQL. Hay roles `usuario` y `administrador`, comprobados en el
+servidor en cada petición. El administrador puede listar cuentas, consultar su
+estado y eliminar otras cuentas desde la interfaz.
 
-# Sprint 1 : Desarrollar la arquitectura base
-## Ejecución local
-
-Requiere Node.js 24.19 o posterior de la serie 24.
-
-Arrancar:
-npm start
-
-Abrir:
-http://localhost:3000
-
-Ejecutar pruebas:
-npm test
+La confirmación por correo y OAuth están pendientes. En esta etapa, activo
+significa `confirmado && !eliminado`. Las sesiones siguen en memoria: se pierden
+al reiniciar y no se comparten entre instancias. Usuarios y roles sí persisten.
+Los logs de actividad corresponden a la siguiente rama.
 
 ## Arquitectura
 
-- Cliente/index.html: página inicial.
-- Cliente/gui.js: presentación e interacción.
-- Cliente/rest.js: comunicación con la API.
-- Servidor/api.js: servidor HTTP y rutas.
-- Servidor/logica.js: lógica de negocio.
-- Servidor/datos.js: almacenamiento en memoria.
+- `Cliente/index.html`: formularios, perfil y tabla de administración.
+- `Cliente/gui.js`: interacción y presentación; muestra datos con `textContent`.
+- `Cliente/rest.js`: peticiones HTTP del mismo origen, con cookie de sesión.
+- `Servidor/api.js`: rutas, validación HTTP y autorización.
+- `Servidor/logica.js`: reglas de negocio y eliminación con permisos.
+- `Servidor/datos.js`: repositorio en memoria para pruebas.
+- `Servidor/datos-postgres.js`: repositorio persistente con consultas parametrizadas.
+- `Servidor/inicio-postgres.js`: arranque con PostgreSQL.
+- `sql/`: migraciones, aplicadas en orden.
 
-El backend sirve el frontend desde el mismo origen.
-El cliente se comunica con el servidor mediante la API.
+JavaScript, Node.js 24, HTML y PostgreSQL 17. El backend sirve el frontend.
+Las contraseñas se almacenan como hashes scrypt con sal; no se devuelven por API.
 
-## Tecnologías
+## Ejecución local (PowerShell)
 
-JavaScript y Node.js para mantener un único lenguaje.
-HTML y JavaScript nativo para una interfaz sin compilación.
-node:test para ejecutar las pruebas automatizadas.
+Requisitos: Node.js >=24.19.0 de la serie 24 y Docker Compose.
 
-## Configuración
+```powershell
+npm ci
+```
 
-Variables opcionales: PORT y HOST.
-En esta etapa no se necesitan secretos ni servicios externos.
-
-## Gestión de usuarios en memoria
-
-La capa de datos almacena los usuarios en un Map. Los datos se pierden
-cuando se reinicia el proceso y no se comparten entre instancias.
-
-La capa lógica permite:
-- Dar de alta usuarios pendientes de confirmación.
-- Validar nombres y correos y rechazar correos duplicados.
-- Listar los usuarios no eliminados.
-- Consultar si un usuario está activo.
-- Realizar una baja lógica del usuario.
-
-Un usuario está activo cuando está confirmado y no está eliminado.
-La confirmación es una operación interna, todavía sin verificación
-por correo ni ruta pública.
-
-Estas operaciones aún no están expuestas mediante la API.
-El registro con contraseña y la sesión se implementarán posteriormente.
-
-### Pruebas
-
-Ejecutar `npm test`.
-
-Actualmente hay 13 pruebas: 3 del esqueleto y 10 de gestión de usuarios,
-incluidos casos de error y protección frente a modificaciones
-accidentales de los objetos devueltos.
-
-
-### API de usuarios
-
-Los datos se almacenan en memoria y se pierden al reiniciar el servidor.
-
-| Método | Ruta | Operación |
-|---|---|---|
-| POST | /api/usuarios | Crear un usuario |
-| GET | /api/usuarios | Listar usuarios no eliminados |
-| GET | /api/usuarios/:id/activo | Consultar si un usuario está activo |
-| DELETE | /api/usuarios/:id | Eliminar un usuario mediante borrado lógico |
-
-Un usuario está activo cuando está confirmado y no está eliminado.
-
-Las rutas de usuarios requieren provisionalmente la cabecera:
-Authorization: Bearer <valor de API_ADMIN_TOKEN>
-
-El token se configura mediante la variable de entorno API_ADMIN_TOKEN.
-Si no está configurado, estas rutas responden con 503.
-Este mecanismo se sustituirá por la autenticación y autorización
-correspondientes durante el desarrollo de las sesiones.
-
-### Pruebas automatizadas
-
-Ejecutar con:
-
-npm test
-
-Actualmente hay 26 pruebas:
-- 3 de estructura.
-- 10 de lógica de usuarios.
-- 13 de la API de usuarios.
-
-### Registro local
-
-POST /api/registro permite registrar una cuenta sin token administrativo.
-
-Recibe un objeto JSON con:
-- nombre
-- email
-- password: entre 15 y 128 caracteres.
-
-La contraseña se almacena mediante un hash scrypt con sal aleatoria.
-Ni la contraseña ni su hash aparecen en las respuestas de usuarios.
-
-Respuestas:
-- 201: usuario creado, pendiente de confirmación.
-- 400: datos no válidos.
-- 409: correo ya registrado.
-
-Los usuarios y los hashes siguen en memoria y se pierden al reiniciar.
-El inicio de sesión y la confirmación por correo están pendientes.
-
-### Autenticación y sesiones
-
-- POST /api/login: recibe email y password; inicia sesión únicamente
-  si la contraseña es correcta y la cuenta está confirmada y no eliminada.
-- GET /api/sesion: devuelve el usuario conectado o 401 si la sesión
-  no es válida.
-- POST /api/logout: elimina la sesión del servidor y borra su cookie.
-
-Login y logout requieren la cabecera X-CineMatch: 1.
-El login recibe el cuerpo en formato application/json.
-
-Las sesiones se almacenan en memoria y caducan a las 8 horas.
-La cookie utiliza HttpOnly, SameSite=Lax y Path=/.
-Con NODE_ENV=production también utiliza Secure y requiere HTTPS.
-
-Usuarios y sesiones se pierden al reiniciar el servidor y no se
-comparten entre instancias.
-
-Las rutas administrativas /api/usuarios siguen protegidas mediante
-API_ADMIN_TOKEN. Tener una sesión no concede permisos de administrador.
-
-La interfaz y la comprobación de la sesión al recargar el navegador
-están pendientes de implementar.
-
-### Interfaz de usuario
-
-La interfaz permite registrar cuentas, iniciar sesión y cerrarla.
-Al cargar la página, consulta /api/sesion para recuperar la sesión vigente.
-
-- Cliente/gui.js gestiona los formularios y los mensajes.
-- Cliente/rest.js realiza las peticiones HTTP.
-- La cookie de sesión la gestiona el navegador; no se almacena
-  el identificador de sesión en localStorage.
-
-Comprobación manual local realizada:
-- Registro de una cuenta pendiente.
-- Inicio de sesión con una cuenta de prueba confirmada.
-- Conservación de la sesión al recargar.
-- Cierre de sesión y posterior recarga sin acceso.
-
-La confirmación por correo sigue pendiente.
-
-### Rutas protegidas y eliminación de cuenta
-
-- GET /api/perfil permite consultar el usuario de la sesión.
-- DELETE /api/perfil permite eliminar la cuenta propia con sesión válida.
-- La eliminación es lógica e invalida todas las sesiones del usuario.
-- La interfaz solicita confirmación antes de eliminar la cuenta.
-
-Validación: 67 pruebas automáticas superadas.
-Comprobaciones manuales: cancelar la eliminación conserva la cuenta;
-confirmarla cierra la sesión; recargar mantiene la sesión cerrada;
-intentar acceder de nuevo con la cuenta eliminada se rechaza.
-
-## Persistencia con PostgreSQL
-
-La aplicación dispone de dos implementaciones de la capa de datos:
-memoria para las pruebas existentes y PostgreSQL para almacenamiento
-persistente. Ambas utilizan un contrato asíncrono común.
-
-Los usuarios y sus hashes sobreviven al reinicio. El registro guarda
-el usuario y su hash en una sola operación. Las consultas públicas
-no devuelven el hash.
-
-### Ejecución local con PostgreSQL
-
-Requisitos: Node.js 24 y Docker con Docker Compose.
-
-1. Ejecutar `npm ci`.
-2. Crear un archivo `.env` en la raíz con esta configuración:
+Crear `.env` en la raíz (no se sube a Git):
 
 ```dotenv
 DB_HOST=127.0.0.1
@@ -201,43 +48,128 @@ DB_USER=cinematch
 DB_PASSWORD=REEMPLAZAR_POR_UNA_CLAVE_LOCAL
 ```
 
-3. Arrancar PostgreSQL:
+Mantener la contraseña existente si la base ya está creada.
 
 ```powershell
 docker compose up -d --wait
-```
-
-4. Crear la tabla:
-
-```powershell
 Get-Content -Raw -Encoding UTF8 .\sql\001-usuarios.sql | docker compose exec -T db psql -U cinematch -d cinematch -v ON_ERROR_STOP=1
-```
-
-5. Arrancar la aplicación:
-
-```powershell
+Get-Content -Raw -Encoding UTF8 .\sql\002-roles.sql | docker compose exec -T db psql -U cinematch -d cinematch -v ON_ERROR_STOP=1
 npm run start:postgres
 ```
 
-El archivo `.env` está excluido de Git.
+Abrir http://localhost:3000. `start:postgres` carga `.env` si existe.
+`npm start` también usa PostgreSQL, pero recibe las variables del entorno,
+como ocurre en Cloud Run. `PORT` vale 3000 por defecto; en producción se escucha
+en `0.0.0.0` salvo que se indique `HOST`.
 
-### Pruebas
+La migración 002 añade el rol sin borrar cuentas ni contraseñas y asigna
+`usuario` a las cuentas existentes. No se debe borrar el volumen local.
 
-- `npm test`: 67 pruebas existentes.
-- `npm run test:postgres`: una prueba de integración con PostgreSQL.
-  Requiere la base de datos arrancada y la tabla creada.
+## Primer administrador y cuentas de prueba
 
-El workflow configura PostgreSQL temporalmente en GitHub Actions
-y ejecuta ambos grupos de pruebas.
+1. Registrar una cuenta desde la aplicación para que se genere su hash.
+2. Con una conexión de administración a la base correcta, sustituir el correo
+   del ejemplo y ejecutar:
 
-Se ha comprobado manualmente que una cuenta sigue almacenada tras
-reiniciar la aplicación y PostgreSQL.
+```sql
+UPDATE usuarios
+SET rol = 'administrador', confirmado = TRUE
+WHERE email = 'tu-correo@example.com'
+  AND eliminado = FALSE AND password_hash IS NOT NULL
+RETURNING id, email, rol, confirmado;
+```
 
-### Estado del despliegue
+Debe devolver exactamente la cuenta elegida. No incluir contraseñas en SQL,
+commits ni capturas. Esta confirmación manual es únicamente el procedimiento
+de pruebas mientras se implementa la verificación por correo.
 
-`npm start` mantiene el almacenamiento en memoria.
-`npm run start:postgres` utiliza PostgreSQL.
+Para habilitar una cuenta normal de prueba, usar otra cuenta registrada:
 
-La conexión del despliegue público a PostgreSQL queda pendiente
-para la siguiente rama. Las sesiones continúan en memoria y se
-invalidan al reiniciar la aplicación.
+```sql
+UPDATE usuarios SET confirmado = TRUE
+WHERE email = 'usuario-prueba@example.com'
+  AND eliminado = FALSE AND password_hash IS NOT NULL
+RETURNING id, email, rol, confirmado;
+```
+
+No existe una ruta pública para asignar roles. Registro y alta administrativa
+siempre crean usuarios con rol `usuario`; ignoran roles y estados enviados por
+el cliente. El primer administrador se habilita explícitamente, nunca de forma
+automática por ser la primera cuenta.
+
+## API y permisos
+
+Se conservan los nombres españoles usados por el proyecto: `/api/usuarios`
+equivale a `/users` en las tareas y `/activo` a `/active`.
+
+| Método y ruta | Acceso |
+|---|---|
+| GET `/api/health` | Público |
+| POST `/api/registro` | Público; crea una cuenta pendiente |
+| POST `/api/login` | Credenciales de una cuenta confirmada y no eliminada |
+| GET `/api/sesion` | Sesión válida |
+| POST `/api/logout` | Cierra la sesión y borra su cookie |
+| GET `/api/perfil` | Datos de la propia cuenta |
+| DELETE `/api/perfil` | Elimina la propia cuenta |
+| GET `/api/usuarios` | Administrador; listado de cuentas no eliminadas con rol y estado |
+| POST `/api/usuarios` | Administrador; alta sin contraseña, conservada de la API inicial |
+| GET `/api/usuarios/:id/activo` | Administrador; devuelve `{ activo: boolean }` |
+| DELETE `/api/usuarios/:id` | Cuenta propia o administrador |
+
+Las rutas protegidas responden 401 sin sesión válida y 403 sin permiso. Una
+cuenta normal no puede borrar otra, aunque conozca su identificador. El rol se
+consulta en el repositorio en cada petición; no se confía en el navegador ni
+se guarda una copia del rol en la sesión.
+
+El mecanismo provisional `API_ADMIN_TOKEN` ha sido retirado. Un token Bearer
+no concede acceso. Login, logout, alta administrativa y eliminaciones exigen
+`X-CineMatch: 1`. La cookie es HttpOnly, SameSite=Lax y Secure en producción.
+Las respuestas JSON llevan `Cache-Control: no-store`.
+
+La eliminación es lógica: retira la cuenta del listado, impide iniciar sesión
+y revoca sus sesiones. Al eliminar la cuenta propia también se borra la cookie.
+La interfaz pide confirmación antes de ambas formas de eliminación.
+
+## Pruebas
+
+```powershell
+npm test
+npm run test:postgres
+```
+
+La segunda orden requiere PostgreSQL con ambas migraciones aplicadas. Comprueba
+persistencia de usuario, hash y rol entre conexiones, restricciones de rol y
+borrado lógico. GitHub Actions prepara PostgreSQL y ejecuta ambos comandos.
+
+Las pruebas de roles cubren registro sin elevación de privilegios, 401/403,
+acceso administrativo, borrado propio y ajeno, protección de las operaciones,
+revocación de sesiones y cambios de rol durante una sesión abierta.
+
+Comprobación manual de interfaz:
+
+1. Iniciar sesión como usuario: no debe aparecer la tabla de administración.
+2. Iniciar sesión como administrador: debe mostrar nombre, correo, rol y estado.
+3. Cancelar una eliminación: la cuenta debe conservarse.
+4. Eliminar una cuenta de prueba: desaparece de la tabla y pierde su sesión.
+5. Recargar: se conserva la sesión mientras siga vivo el proceso del servidor.
+
+## Despliegue en Cloud Run
+
+El servicio usa PostgreSQL en Cloud SQL. Configuración del entorno:
+
+- `NODE_ENV=production`, `HOST=0.0.0.0`.
+- `DB_HOST=/cloudsql/cinematch-procesos:europe-west1:cinematch-db`.
+- `DB_PORT=5432`, `DB_NAME=cinematch`, `DB_USER=cinematch_app`.
+- `DB_PASSWORD`: referencia al secreto `cinematch-db-password`.
+- Instancia de Cloud SQL adjunta y cuenta de servicio con Cloud SQL Client y
+  acceso al contenido del secreto.
+
+**Antes de fusionar esta rama y desplegar el código nuevo**, ejecutar
+`sql/002-roles.sql` en la base `cinematch` de Cloud SQL con el propietario de la
+tabla. El usuario de ejecución de la aplicación no necesita permisos DDL.
+La migración es compatible con el código anterior y puede aplicarse antes.
+Después se habilita explícitamente la cuenta administradora que se vaya a usar.
+
+El arranque comprueba que existen la tabla y la columna `rol` antes de escuchar.
+Tras el despliegue, buscar `CineMatch con PostgreSQL iniciado en el puerto 8080`
+y comprobar login y permisos con una cuenta normal y otra administradora.

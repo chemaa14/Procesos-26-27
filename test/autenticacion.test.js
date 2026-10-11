@@ -37,7 +37,7 @@ test("autentica una cuenta confirmada con la contraseña correcta", async () => 
 
   assert.deepEqual(
     Object.keys(resultado).sort(),
-    ["id", "nombre", "email", "confirmado", "eliminado"].sort()
+    ["id", "nombre", "email", "confirmado", "eliminado", "rol"].sort()
   );
 });
 

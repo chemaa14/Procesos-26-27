@@ -45,7 +45,7 @@ test("registra un usuario pendiente y almacena su hash por separado", async () =
   ]) {
     assert.deepEqual(
       Object.keys(resultado).sort(),
-      ["id", "nombre", "email", "confirmado", "eliminado"].sort()
+      ["id", "nombre", "email", "confirmado", "eliminado", "rol"].sort()
     );
   }
 });

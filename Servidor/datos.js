@@ -8,6 +8,7 @@ export class DatosUsuarios {
   }
 
   async guardar(usuario) {
+    usuario = this.validarRol(usuario);
     // Comprobar y guardar sin await evita altas simultáneas con el mismo correo.
     const duplicado = [...this.usuarios.values()].some(
       (existente) => existente.email === usuario.email && existente.id !== usuario.id
@@ -17,6 +18,14 @@ export class DatosUsuarios {
     }
     this.usuarios.set(usuario.id, { ...usuario });
     return { ...usuario };
+  }
+
+  validarRol(usuario) {
+    const rol = usuario.rol ?? "usuario";
+    if (!["usuario", "administrador"].includes(rol)) {
+      throw new ErrorDatos("ROL_INVALIDO", "El rol no es válido.");
+    }
+    return { ...usuario, rol };
   }
 
   async buscarPorId(id) {
@@ -47,6 +56,7 @@ export class DatosUsuarios {
   }
 
   async crearConHash(usuario, hash) {
+  usuario = this.validarRol(usuario);
   const duplicado = [...this.usuarios.values()].some(
     (existente) => existente.email === usuario.email
   );

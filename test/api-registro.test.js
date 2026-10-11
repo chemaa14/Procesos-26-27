@@ -8,7 +8,7 @@ const PASSWORD = "Mi frase secreta para CineMatch";
 
 async function conServidor(comprobar) {
   // El registro debe funcionar incluso sin token administrativo.
-  const { servidor, logica } = crearAplicacion({ tokenAdmin: "" });
+  const { servidor, logica } = crearAplicacion();
 
   try {
     servidor.listen(0, "127.0.0.1");
@@ -62,7 +62,7 @@ test("el registro público crea una cuenta pendiente sin devolver credenciales",
 
     assert.deepEqual(
       Object.keys(usuario).sort(),
-      ["id", "nombre", "email", "confirmado", "eliminado"].sort()
+      ["id", "nombre", "email", "confirmado", "eliminado", "rol"].sort()
     );
   });
 });

@@ -1,6 +1,6 @@
 import { ErrorDatos } from "./errores-datos.js";
 
-const CAMPOS = "id, nombre, email, confirmado, eliminado";
+const CAMPOS = "id, nombre, email, confirmado, eliminado, rol";
 
 export class DatosUsuariosPostgres {
   constructor(pool) {
@@ -11,20 +11,22 @@ export class DatosUsuariosPostgres {
     try {
       const resultado = await this.pool.query(
         `INSERT INTO usuarios
-          (id, nombre, email, confirmado, eliminado)
-         VALUES ($1, $2, $3, $4, $5)
+          (id, nombre, email, confirmado, eliminado, rol)
+         VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (id) DO UPDATE SET
            nombre = EXCLUDED.nombre,
            email = EXCLUDED.email,
            confirmado = EXCLUDED.confirmado,
-           eliminado = EXCLUDED.eliminado
+           eliminado = EXCLUDED.eliminado,
+           rol = EXCLUDED.rol
          RETURNING ${CAMPOS}`,
         [
           usuario.id,
           usuario.nombre,
           usuario.email,
           usuario.confirmado,
-          usuario.eliminado
+          usuario.eliminado,
+          usuario.rol ?? "usuario"
         ]
       );
 
@@ -96,8 +98,8 @@ export class DatosUsuariosPostgres {
   try {
     const resultado = await this.pool.query(
       `INSERT INTO usuarios
-        (id, nombre, email, confirmado, eliminado, password_hash)
-       VALUES ($1, $2, $3, $4, $5, $6)
+        (id, nombre, email, confirmado, eliminado, password_hash, rol)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING ${CAMPOS}`,
       [
         usuario.id,
@@ -105,7 +107,8 @@ export class DatosUsuariosPostgres {
         usuario.email,
         usuario.confirmado,
         usuario.eliminado,
-        hash
+        hash,
+        usuario.rol ?? "usuario"
       ]
     );
 
