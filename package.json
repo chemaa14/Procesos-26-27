@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node Servidor/api.js",
+    "start": "node Servidor/inicio-postgres.js",
     "test": "node --test",
-    "start:postgres": "node --env-file=.env Servidor/inicio-postgres.js",
+    "start:postgres": "node --env-file-if-exists=.env Servidor/inicio-postgres.js",
     "test:postgres": "node --env-file-if-exists=.env --test integracion/postgres.js"
   },
   "engines": {
