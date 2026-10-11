@@ -1,17 +1,20 @@
+import { crearRegistroActividad } from "./actividad.js";
 import { once } from "node:events";
 import { crearAplicacion } from "./api.js";
 import { crearPool } from "./conexion.js";
 import { DatosUsuariosPostgres } from "./datos-postgres.js";
 
-const pool = crearPool();
+const registrarActividad = crearRegistroActividad();
+let pool;
 let servidor;
 
 try {
+  pool = crearPool({ registrarActividad });
   // Comprueba la conexión y que la tabla está preparada.
   await pool.query("SELECT id, rol FROM usuarios LIMIT 0");
 
   const datos = new DatosUsuariosPostgres(pool);
-  const aplicacion = crearAplicacion({ datos });
+  const aplicacion = crearAplicacion({ datos, registrarActividad });
   servidor = aplicacion.servidor;
 
   const puerto = Number(process.env.PORT || 3000);
@@ -22,7 +25,7 @@ try {
   servidor.listen(puerto, host);
   await once(servidor, "listening");
 
-  console.log(`CineMatch con PostgreSQL iniciado en el puerto ${puerto}`);
+  registrarActividad("servidor_iniciado", { puerto });
 
   let cerrando = false;
 
@@ -30,7 +33,7 @@ try {
     if (cerrando) return;
     cerrando = true;
 
-    console.log("Cerrando CineMatch...");
+    registrarActividad("servidor_cerrando");
 
     const limite = setTimeout(() => {
       servidor.closeAllConnections();
@@ -46,8 +49,9 @@ try {
       });
 
       await pool.end();
-    } catch {
-      console.error("Error al cerrar la aplicación.");
+      registrarActividad("servidor_cerrado");
+    } catch (error) {
+      registrarActividad("error_cierre", { codigo: error?.code });
       process.exitCode = 1;
     } finally {
       clearTimeout(limite);
@@ -56,16 +60,18 @@ try {
 
   process.once("SIGINT", cerrar);
   process.once("SIGTERM", cerrar);
-} catch {
-  console.error(
-    "No se pudo iniciar CineMatch. Revisa PostgreSQL, las variables y la tabla usuarios."
-  );
+} catch (error) {
+  registrarActividad("error_inicio", { codigo: error?.code });
 
   if (servidor?.listening) {
     servidor.close();
     servidor.closeAllConnections();
   }
 
-  await pool.end();
+  try {
+    await pool?.end();
+  } catch (errorCierre) {
+    registrarActividad("error_cierre", { codigo: errorCierre?.code });
+  }
   process.exitCode = 1;
 }

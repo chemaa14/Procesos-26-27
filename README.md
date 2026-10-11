@@ -13,7 +13,7 @@ estado y eliminar otras cuentas desde la interfaz.
 La confirmación por correo y OAuth están pendientes. En esta etapa, activo
 significa `confirmado && !eliminado`. Las sesiones siguen en memoria: se pierden
 al reiniciar y no se comparten entre instancias. Usuarios y roles sí persisten.
-Los logs de actividad corresponden a la siguiente rama.
+Los logs de actividad se emiten como JSON por la salida estándar.
 
 ## Arquitectura
 
@@ -171,5 +171,86 @@ La migración es compatible con el código anterior y puede aplicarse antes.
 Después se habilita explícitamente la cuenta administradora que se vaya a usar.
 
 El arranque comprueba que existen la tabla y la columna `rol` antes de escuchar.
-Tras el despliegue, buscar `CineMatch con PostgreSQL iniciado en el puerto 8080`
+Tras el despliegue, buscar el evento JSON `servidor_iniciado` con `puerto: 8080`
 y comprobar login y permisos con una cuenta normal y otra administradora.
+
+
+## Logs de actividad (Hito 3)
+
+`Servidor/actividad.js` genera una línea JSON por registro, sin dependencias
+adicionales. En local se ve en la terminal; Cloud Run recoge la salida estándar
+como logs estructurados. No se crea una tabla ni se necesita otro secreto.
+
+Cada petición completada produce un registro con `solicitudId`, `metodo`,
+`ruta`, `estado` HTTP, `duracionMs`, `time`, `evento`, `message` y `severity`.
+`X-Request-Id` en la respuesta contiene el mismo identificador, generado por el
+servidor. No se reutilizan identificadores suministrados por el cliente.
+
+Eventos principales:
+
+- `usuario_registrado`, `usuario_creado`: alta pública o administrativa.
+- `login_correcto`, `login_rechazado`, `logout`: accesos y cierre de sesión.
+- `usuario_eliminado`: baja lógica; incluye `usuarioId` del actor y
+  `objetivoId` de la cuenta eliminada cuando son UUID válidos.
+- `usuarios_listados`, `estado_consultado`: consultas de administración.
+- `acceso_denegado`: 401/403; `peticion_rechazada`: otros errores 4xx.
+- `error_interno`: respuesta 5xx; `peticion_http`: demás peticiones completadas.
+- `peticion_interrumpida`: conexión cerrada antes de terminar la respuesta;
+  no se asigna un estado HTTP de éxito a esa interrupción.
+- `servidor_iniciado`, `servidor_cerrando`, `servidor_cerrado` y errores de
+  inicio, cierre o conexiones PostgreSQL.
+
+Se usa INFO para operaciones correctas, WARNING para rechazos e interrupciones
+y ERROR para fallos internos o de infraestructura. Logout indica que se ha
+procesado la solicitud; también se admite sin una sesión existente.
+
+La lista de campos es cerrada. No se registran contraseñas, hashes, tokens,
+cookies, cabeceras, cuerpos de petición/respuesta, correos, nombres, SQL ni
+mensajes o stacks de excepciones. Las rutas dinámicas se convierten en
+`/api/usuarios/:id` o `/api/usuarios/:id/activo`; las desconocidas se registran
+como `otra`. Se descartan los parámetros de consulta. Los errores pueden
+incluir un `codigo` de una lista permitida, como `ECONNREFUSED`, `42P01` o
+`CONFIGURACION_INVALIDA`, para orientar el diagnóstico.
+
+Estas reglas corresponden a los logs de la aplicación. Los registros de
+peticiones generados por la plataforma se gestionan por separado. Los logs por
+stdout no constituyen una auditoría transaccional garantizada; un fallo al
+escribirlos no cambia el resultado de una operación de la aplicación.
+
+### Validación local
+
+```powershell
+npm test
+npm run test:postgres
+npm run start:postgres
+```
+
+`npm test` incluye pruebas del formato, accesos, bajas, códigos HTTP,
+identificadores, fallos de base de datos y arranque, y exclusión de secretos
+(incluso en rutas desconocidas o parámetros de consulta). La prueba PostgreSQL
+requiere el Docker local y las migraciones 001 y 002, ya utilizadas en roles.
+
+Desde el navegador, iniciar sesión con una cuenta local confirmada, cerrar la
+sesión y realizar un intento con contraseña incorrecta. En la terminal deben
+aparecer `login_correcto`, `logout` y `login_rechazado`. No deben aparecer los
+datos introducidos. `npm test` también muestra líneas JSON de otras pruebas;
+es normal y no representa un fallo.
+
+### Consulta en Google Cloud
+
+Después del merge y despliegue, revisar Observabilidad → Registros de Cloud Run.
+En el Explorador de registros se puede utilizar:
+
+```text
+resource.type="cloud_run_revision"
+resource.labels.service_name="cinematch"
+jsonPayload.evento="login_rechazado"
+```
+
+Cambiar el evento por `servidor_iniciado`, `usuario_eliminado` o `error_interno`,
+o quitar la última condición y filtrar por `severity>=WARNING`.
+La cuenta administradora local y la de Cloud SQL son independientes: para
+probar roles en la URL pública se debe registrar y habilitar una cuenta en esa
+base, siguiendo el procedimiento del primer administrador.
+
+Referencia: https://docs.cloud.google.com/run/docs/logging
