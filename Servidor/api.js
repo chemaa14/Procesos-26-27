@@ -1,7 +1,6 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
-import { createHash, timingSafeEqual } from "node:crypto";
 
 import { DatosUsuarios } from "./datos.js";
 import { LogicaUsuarios, ErrorUsuarios } from "./logica.js";
@@ -44,30 +43,6 @@ function metodoNoPermitido(respuesta, permitidos) {
   return responderJSON(respuesta, 405, {
     error: "Método no permitido."
   });
-}
-
-function comprobarAcceso(peticion, tokenAdmin) {
-  if (!tokenAdmin) {
-    throw new ErrorHTTP(
-      503,
-      "La API de usuarios todavía no está habilitada."
-    );
-  }
-
-  const recibido = peticion.headers.authorization || "";
-  const esperado = `Bearer ${tokenAdmin}`;
-
-  const hashRecibido = createHash("sha256")
-    .update(recibido)
-    .digest();
-
-  const hashEsperado = createHash("sha256")
-    .update(esperado)
-    .digest();
-
-  if (!timingSafeEqual(hashRecibido, hashEsperado)) {
-    throw new ErrorHTTP(401, "Credenciales no válidas.");
-  }
 }
 
 function leerJSON(peticion) {
@@ -178,7 +153,7 @@ function comprobarCabeceraCliente(peticion) {
   }
 }
 
-export function crearAplicacion({  tokenAdmin = process.env.API_ADMIN_TOKEN || "",
+export function crearAplicacion({
   cookieSegura = process.env.NODE_ENV === "production",
   datos = new DatosUsuarios()
 } = {})
@@ -207,6 +182,12 @@ async function exigirUsuario(peticion) {
 
   return usuario;
 }
+
+  function exigirAdministrador(usuario) {
+    if (usuario.rol !== "administrador") {
+      throw new ErrorHTTP(403, "Se requiere el rol de administrador.");
+    }
+  }
 
   const servidor = createServer(async (peticion, respuesta) => {
     respuesta.setHeader("X-Content-Type-Options", "nosniff");
@@ -306,7 +287,7 @@ async function exigirUsuario(peticion) {
           if (metodo === "DELETE") {
             comprobarCabeceraCliente(peticion);
 
-            await logica.eliminar(usuario.id);
+            await logica.eliminarConPermisos(usuario.id, usuario.id);
 
             // Invalida todas las sesiones de esta cuenta.
             sesiones.eliminarDeUsuario(usuario.id);
@@ -333,7 +314,11 @@ async function exigirUsuario(peticion) {
       );
 
       if (ruta === "/api/usuarios" || rutaActivo || rutaUsuario) {
-        comprobarAcceso(peticion, tokenAdmin);
+        const actor = await exigirUsuario(peticion);
+        // DELETE permite cuenta propia o administrador. El resto requiere admin.
+        if (!(rutaUsuario && metodo === "DELETE")) {
+          exigirAdministrador(actor);
+        }
 
         
 
@@ -345,6 +330,7 @@ async function exigirUsuario(peticion) {
           }
 
           if (metodo === "POST") {
+            comprobarCabeceraCliente(peticion);
             const contenido = await leerJSON(peticion);
 
             // Solo admitimos los campos necesarios para el alta.
@@ -373,7 +359,11 @@ async function exigirUsuario(peticion) {
           return metodoNoPermitido(respuesta, "DELETE");
         }
 
-        await logica.eliminar(rutaUsuario[1]);
+        comprobarCabeceraCliente(peticion);
+        await logica.eliminarConPermisos(rutaUsuario[1], actor.id);
+        if (actor.id === rutaUsuario[1]) {
+          escribirCookieSesion(respuesta, null, cookieSegura);
+        }
         sesiones.eliminarDeUsuario(rutaUsuario[1]);
         
         respuesta.writeHead(204, { "Cache-Control": "no-store" });
@@ -405,10 +395,6 @@ async function exigirUsuario(peticion) {
       if (respuesta.destroyed || respuesta.writableEnded) return;
 
       if (error instanceof ErrorHTTP) {
-        if (error.estado === 401) {
-          respuesta.setHeader("WWW-Authenticate", "Bearer");
-        }
-
         if (error.estado === 413) {
           respuesta.setHeader("Connection", "close");
         }
@@ -426,7 +412,9 @@ async function exigirUsuario(peticion) {
           EMAIL_DUPLICADO: 409,
           USUARIO_NO_ENCONTRADO: 404,
           USUARIO_ELIMINADO: 409,
-          CREDENCIALES_INVALIDAS: 401
+          CREDENCIALES_INVALIDAS: 401,
+          SESION_INVALIDA: 401,
+          PERMISO_DENEGADO: 403
         };
 
         const estado = Object.hasOwn(estados, error.codigo)

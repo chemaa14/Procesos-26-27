@@ -2,14 +2,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 
+import { DatosUsuarios } from "../Servidor/datos.js";
 import { crearAplicacion } from "../Servidor/api.js";
 
 const PASSWORD = "Mi frase secreta para CineMatch";
-const TOKEN_ADMIN = "token-ficticio-solo-para-pruebas";
+
 
 async function conServidor(comprobar) {
+  const datos = new DatosUsuarios();
   const { servidor, logica } = crearAplicacion({
-    tokenAdmin: TOKEN_ADMIN,
+    datos,
     cookieSegura: false
   });
 
@@ -19,7 +21,7 @@ async function conServidor(comprobar) {
 
     const base = `http://127.0.0.1:${servidor.address().port}`;
 
-    await comprobar(base, logica);
+    await comprobar(base, logica, datos);
   } finally {
     if (servidor.listening) {
       const cerrado = new Promise((resolve, reject) => {
@@ -95,7 +97,7 @@ test("el perfil devuelve solo los datos del usuario conectado", async () => {
 
     assert.deepEqual(
       Object.keys(cuerpo.usuario).sort(),
-      ["id", "nombre", "email", "confirmado", "eliminado"].sort()
+      ["id", "nombre", "email", "confirmado", "eliminado", "rol"].sort()
     );
   });
 });
@@ -228,7 +230,7 @@ test("una sesión normal no autoriza a eliminar otra cuenta por la ruta administ
       }
     );
 
-    assert.equal(respuesta.status, 401);
+    assert.equal(respuesta.status, 403);
     await respuesta.json();
 
     assert.equal((await logica.estaActivo(ana.id)), true);
@@ -237,16 +239,21 @@ test("una sesión normal no autoriza a eliminar otra cuenta por la ruta administ
 });
 
 test("la eliminación administrativa también impide usar las sesiones de la cuenta", async () => {
-  await conServidor(async (base, logica) => {
+  await conServidor(async (base, logica, datos) => {
     const usuario = await crearUsuario(logica);
     const cookie = await iniciarSesion(base);
+
+    const admin = await crearUsuario(logica, "admin@example.com");
+    await datos.guardar({ ...admin, confirmado: true, rol: "administrador" });
+    const cookieAdmin = await iniciarSesion(base, admin.email);
 
     const respuesta = await fetch(
       `${base}/api/usuarios/${usuario.id}`,
       {
         method: "DELETE",
         headers: {
-          Authorization: `Bearer ${TOKEN_ADMIN}`
+          Cookie: cookieAdmin,
+          "X-CineMatch": "1"
         }
       }
     );

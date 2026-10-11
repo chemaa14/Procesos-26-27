@@ -8,7 +8,6 @@ const PASSWORD = "Mi frase secreta para CineMatch";
 
 async function conServidor(comprobar, { cookieSegura = false } = {}) {
   const { servidor, logica } = crearAplicacion({
-    tokenAdmin: "",
     cookieSegura
   });
 
@@ -100,7 +99,7 @@ test("el login crea una cookie y permite consultar la sesión repetidamente", as
     assert.equal(cuerpo.usuario.id, usuario.id);
     assert.deepEqual(
       Object.keys(cuerpo.usuario).sort(),
-      ["id", "nombre", "email", "confirmado", "eliminado"].sort()
+      ["id", "nombre", "email", "confirmado", "eliminado", "rol"].sort()
     );
 
     // Simula nuevas peticiones usando la misma cookie.

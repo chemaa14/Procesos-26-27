@@ -1,11 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { DatosUsuarios } from "../Servidor/datos.js";
 import { crearAplicacion } from "../Servidor/api.js";
 
-const TOKEN_PRUEBAS = "clave-ficticia-solo-para-pruebas";
+const PASSWORD = "Frase de prueba del administrador";
 
-async function conServidor(comprobar, tokenAdmin = TOKEN_PRUEBAS) {
-  const { servidor, logica } = crearAplicacion({ tokenAdmin });
+async function conServidor(comprobar) {
+  const datos = new DatosUsuarios();
+  const { servidor, logica } = crearAplicacion({ datos, cookieSegura: false });
+  const registrado = await logica.registrar({ nombre: "Admin", email: "admin@example.com", password: PASSWORD });
+  const admin = await datos.guardar({ ...registrado, confirmado: true, rol: "administrador" });
 
   await new Promise((resolve, reject) => {
     servidor.once("error", reject);
@@ -14,20 +18,29 @@ async function conServidor(comprobar, tokenAdmin = TOKEN_PRUEBAS) {
 
   const base = `http://127.0.0.1:${servidor.address().port}`;
 
+  const login = await fetch(`${base}/api/login`, {
+    method: "POST", headers: { "Content-Type": "application/json", "X-CineMatch": "1" },
+    body: JSON.stringify({ email: admin.email, password: PASSWORD })
+  });
+  assert.equal(login.status, 200);
+  const cookie = login.headers.get("set-cookie").split(";")[0];
+  await login.json();
+
   async function pedir(ruta, opciones = {}) {
     const { headers = {}, ...resto } = opciones;
 
     return fetch(`${base}${ruta}`, {
       ...resto,
       headers: {
-        Authorization: `Bearer ${TOKEN_PRUEBAS}`,
+        Cookie: cookie,
+        "X-CineMatch": "1",
         ...headers
       }
     });
   }
 
   try {
-    await comprobar({ pedir, logica });
+    await comprobar({ pedir, logica, admin });
   } finally {
     servidor.closeAllConnections();
     await new Promise((resolve) => servidor.close(resolve));
@@ -46,7 +59,7 @@ function alta(pedir, datos = {
 }
 
 test("API: el alta devuelve 201 y un usuario pendiente", async () => {
-  await conServidor(async ({ pedir }) => {
+  await conServidor(async ({ pedir, admin }) => {
     const respuesta = await alta(pedir, {
       nombre: "Ana",
       email: "ana@example.com",
@@ -66,7 +79,7 @@ test("API: el alta devuelve 201 y un usuario pendiente", async () => {
 });
 
 test("API: el listado incluye al usuario creado", async () => {
-  await conServidor(async ({ pedir }) => {
+  await conServidor(async ({ pedir, admin }) => {
     const creada = await alta(pedir);
     const { usuario } = await creada.json();
 
@@ -74,13 +87,13 @@ test("API: el listado incluye al usuario creado", async () => {
 
     assert.equal(respuesta.status, 200);
     assert.deepEqual(await respuesta.json(), {
-      usuarios: [usuario]
+      usuarios: [admin, usuario]
     });
   });
 });
 
 test("API: consulta el estado pendiente y confirmado", async () => {
-  await conServidor(async ({ pedir, logica }) => {
+  await conServidor(async ({ pedir, logica, admin }) => {
     const creada = await alta(pedir);
     const { usuario } = await creada.json();
     const ruta = `/api/usuarios/${usuario.id}/activo`;
@@ -99,7 +112,7 @@ test("API: consulta el estado pendiente y confirmado", async () => {
 });
 
 test("API: eliminar devuelve 204 y retira al usuario del listado", async () => {
-  await conServidor(async ({ pedir, logica }) => {
+  await conServidor(async ({ pedir, logica, admin }) => {
     const creada = await alta(pedir);
     const { usuario } = await creada.json();
     (await logica.confirmar(usuario.id));
@@ -112,7 +125,7 @@ test("API: eliminar devuelve 204 y retira al usuario del listado", async () => {
     assert.equal(await respuesta.text(), "");
 
     const listado = await pedir("/api/usuarios");
-    assert.deepEqual(await listado.json(), { usuarios: [] });
+    assert.deepEqual(await listado.json(), { usuarios: [admin] });
 
     const estado = await pedir(
       `/api/usuarios/${usuario.id}/activo`
@@ -122,7 +135,7 @@ test("API: eliminar devuelve 204 y retira al usuario del listado", async () => {
 });
 
 test("API: los datos inválidos devuelven 400", async () => {
-  await conServidor(async ({ pedir }) => {
+  await conServidor(async ({ pedir, admin }) => {
     const casos = [
       [{ nombre: "", email: "ana@example.com" }, "NOMBRE_INVALIDO"],
       [{ nombre: "Ana", email: "incorrecto" }, "EMAIL_INVALIDO"]
@@ -138,7 +151,7 @@ test("API: los datos inválidos devuelven 400", async () => {
 });
 
 test("API: un correo duplicado devuelve 409", async () => {
-  await conServidor(async ({ pedir }) => {
+  await conServidor(async ({ pedir, admin }) => {
     await alta(pedir);
 
     const respuesta = await alta(pedir, {
@@ -155,7 +168,7 @@ test("API: un correo duplicado devuelve 409", async () => {
 });
 
 test("API: consultar o eliminar un usuario inexistente devuelve 404", async () => {
-  await conServidor(async ({ pedir }) => {
+  await conServidor(async ({ pedir, admin }) => {
     const respuestas = [
       await pedir("/api/usuarios/no-existe/activo"),
       await pedir("/api/usuarios/no-existe", { method: "DELETE" })
@@ -172,7 +185,7 @@ test("API: consultar o eliminar un usuario inexistente devuelve 404", async () =
 });
 
 test("API: rechaza JSON mal formado y valores que no sean objetos", async () => {
-  await conServidor(async ({ pedir }) => {
+  await conServidor(async ({ pedir, admin }) => {
     for (const body of ["{", "null", "[]", '"texto"']) {
       const respuesta = await pedir("/api/usuarios", {
         method: "POST",
@@ -184,12 +197,12 @@ test("API: rechaza JSON mal formado y valores que no sean objetos", async () => 
     }
 
     const listado = await pedir("/api/usuarios");
-    assert.deepEqual(await listado.json(), { usuarios: [] });
+    assert.deepEqual(await listado.json(), { usuarios: [admin] });
   });
 });
 
 test("API: un formato distinto de JSON devuelve 415", async () => {
-  await conServidor(async ({ pedir }) => {
+  await conServidor(async ({ pedir, admin }) => {
     const respuesta = await pedir("/api/usuarios", {
       method: "POST",
       headers: { "Content-Type": "text/plain" },
@@ -201,7 +214,7 @@ test("API: un formato distinto de JSON devuelve 415", async () => {
 });
 
 test("API: un cuerpo demasiado grande devuelve 413", async () => {
-  await conServidor(async ({ pedir }) => {
+  await conServidor(async ({ pedir, admin }) => {
     const respuesta = await alta(pedir, {
       nombre: "a".repeat(17 * 1024),
       email: "ana@example.com"
@@ -210,12 +223,12 @@ test("API: un cuerpo demasiado grande devuelve 413", async () => {
     assert.equal(respuesta.status, 413);
 
     const listado = await pedir("/api/usuarios");
-    assert.deepEqual(await listado.json(), { usuarios: [] });
+    assert.deepEqual(await listado.json(), { usuarios: [admin] });
   });
 });
 
 test("API: todas las operaciones rechazan credenciales ausentes o incorrectas", async () => {
-  await conServidor(async ({ pedir, logica }) => {
+  await conServidor(async ({ pedir, logica, admin }) => {
     const usuario = await logica.alta({
       nombre: "Ana",
       email: "ana@example.com"
@@ -232,26 +245,23 @@ test("API: todas las operaciones rechazan credenciales ausentes o incorrectas", 
       for (const [ruta, method] of operaciones) {
         const respuesta = await pedir(ruta, {
           method,
-          headers: { Authorization }
+          headers: { Authorization, Cookie: "" }
         });
 
         assert.equal(respuesta.status, 401);
-        assert.equal(
-          respuesta.headers.get("www-authenticate"),
-          "Bearer"
-        );
+
       }
     }
 
-    assert.equal((await logica.listar()).length, 1);
+    assert.equal((await logica.listar()).length, 2);
     assert.equal((await logica.obtener(usuario.id)).eliminado, false);
   });
 });
 
-test("API: sin clave configurada bloquea usuarios pero mantiene health", async () => {
-  await conServidor(async ({ pedir }) => {
-    const respuesta = await pedir("/api/usuarios");
-    assert.equal(respuesta.status, 503);
+test("API: sin sesión bloquea usuarios pero mantiene health", async () => {
+  await conServidor(async ({ pedir, admin }) => {
+    const respuesta = await pedir("/api/usuarios", { headers: { Cookie: "" } });
+    assert.equal(respuesta.status, 401);
 
     const health = await pedir("/api/health", {
       headers: { Authorization: "" }
@@ -262,11 +272,11 @@ test("API: sin clave configurada bloquea usuarios pero mantiene health", async (
       ok: true,
       aplicacion: "CineMatch"
     });
-  }, "");
+  });
 });
 
 test("API: un método no permitido devuelve 405 y la cabecera Allow", async () => {
-  await conServidor(async ({ pedir }) => {
+  await conServidor(async ({ pedir, admin }) => {
     const respuesta = await pedir("/api/usuarios", {
       method: "PUT"
     });

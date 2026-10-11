@@ -57,6 +57,7 @@ export class LogicaUsuarios {
       id: randomUUID(),
       nombre: nombre.trim(),
       email: emailNormalizado,
+      rol: "usuario",
       confirmado: false,
       eliminado: false
     };
@@ -112,6 +113,18 @@ export class LogicaUsuarios {
 
     usuario.confirmado = true;
     return await this.datos.guardar(usuario);
+  }
+
+  // El actor procede de la sesión; se vuelve a consultar su estado y rol.
+  async eliminarConPermisos(id, actorId) {
+    const actor = await this.datos.buscarPorId(actorId);
+    if (!actor || !actor.confirmado || actor.eliminado) {
+      throw new ErrorUsuarios("SESION_INVALIDA", "Se requiere una sesión válida.");
+    }
+    if (actor.id !== id && actor.rol !== "administrador") {
+      throw new ErrorUsuarios("PERMISO_DENEGADO", "No puedes eliminar otra cuenta.");
+    }
+    await this.eliminar(id);
   }
 
   async eliminar(id) {
