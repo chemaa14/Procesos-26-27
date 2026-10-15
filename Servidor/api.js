@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 import { DatosUsuarios } from "./datos.js";
-import { LogicaUsuarios, ErrorUsuarios } from "./logica.js";
+import { LogicaUsuarios, ErrorUsuarios, normalizarEmail } from "./logica.js";
 import { Sesiones } from "./sesiones.js";
 
 const archivosPublicos = {
@@ -226,6 +226,20 @@ async function exigirUsuario(peticion) {
       const ruta = url.pathname;
       actividad.ruta = rutaParaRegistro(ruta);
       const metodo = peticion.method;
+
+      if (ruta === "/api/prueba/email") {
+        if (metodo !== "POST") return metodoNoPermitido(respuesta, "POST");
+        try {
+          const cuerpo = await leerJSON(peticion);
+          return responderJSON(respuesta, 200, { email: normalizarEmail(cuerpo.email) });
+        } catch (error) {
+          if (error instanceof ErrorHTTP ||
+              (error instanceof ErrorUsuarios && error.codigo === "EMAIL_INVALIDO")) {
+            return responderJSON(respuesta, 400, { error: "EMAIL_INVALIDO" });
+          }
+          throw error;
+        }
+      }
 
       if (ruta === "/api/health") {
         if (metodo !== "GET") {
