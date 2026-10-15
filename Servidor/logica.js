@@ -17,6 +17,22 @@ export class ErrorUsuarios extends Error {
   }
 }
 
+// Regla pura: normaliza y valida sin consultar la base de datos.
+export function normalizarEmail(email) {
+  const invalido = () => new ErrorUsuarios("EMAIL_INVALIDO", "El correo electrónico no es válido.");
+  if (typeof email !== "string") throw invalido();
+  const normalizado = email.trim().toLowerCase();
+  const partes = normalizado.split("@");
+  if (partes.length !== 2 || !partes[0] || /\s/.test(normalizado)) {
+    throw invalido();
+  }
+  const dominio = partes[1];
+  if (!dominio.includes(".") || dominio.startsWith(".") || dominio.endsWith(".")) {
+    throw invalido();
+  }
+  return normalizado;
+}
+
 export class LogicaUsuarios {
   constructor(datos) {
     this.datos = datos;
@@ -30,21 +46,7 @@ export class LogicaUsuarios {
       );
     }
 
-    if (typeof email !== "string") {
-      throw new ErrorUsuarios(
-        "EMAIL_INVALIDO",
-        "El correo electrónico no es válido."
-      );
-    }
-
-    const emailNormalizado = email.trim().toLowerCase();
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNormalizado)) {
-      throw new ErrorUsuarios(
-        "EMAIL_INVALIDO",
-        "El correo electrónico no es válido."
-      );
-    }
+    const emailNormalizado = normalizarEmail(email);
 
     if (await this.datos.buscarPorEmail(emailNormalizado)) {
       throw new ErrorUsuarios(
@@ -167,7 +169,13 @@ async autenticar({ email, password } = {}) {
     throw errorAcceso();
   }
 
-  const emailNormalizado = email.trim().toLowerCase();
+  let emailNormalizado;
+  try {
+    emailNormalizado = normalizarEmail(email);
+  } catch (error) {
+    if (error instanceof ErrorUsuarios && error.codigo === "EMAIL_INVALIDO") throw errorAcceso();
+    throw error;
+  }
   const usuario = await this.datos.buscarPorEmail(emailNormalizado);
 
   const hash = usuario
