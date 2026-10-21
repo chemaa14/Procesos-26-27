@@ -266,21 +266,22 @@ async function exigirUsuario(peticion) {
         if (metodo !== "GET") return metodoNoPermitido(respuesta, "GET");
         cookieOAuth(respuesta, null, cookieSegura);
         try {
-          if (!google) throw new ErrorOAuth("OAUTH_INVALIDO");
+          if (!google) throw new ErrorOAuth("OAUTH_INVALIDO", "proveedor_desactivado");
           const estados = url.searchParams.getAll("state");
           const navegador = leerCookieOAuth(peticion);
-          if (estados.length !== 1 || !/^[a-f0-9]{64}$/.test(estados[0]) || !navegador) {
-            throw new ErrorOAuth("OAUTH_INVALIDO");
+          if (!navegador) throw new ErrorOAuth("OAUTH_INVALIDO", "cookie_ausente");
+          if (estados.length !== 1 || !/^[a-f0-9]{64}$/.test(estados[0])) {
+            throw new ErrorOAuth("OAUTH_INVALIDO", "estado_invalido");
           }
           const intento = await intentosOAuth.consumir(estados[0], navegador);
-          if (!intento) throw new ErrorOAuth("OAUTH_INVALIDO");
+          if (!intento) throw new ErrorOAuth("OAUTH_INVALIDO", "intento_no_valido");
           if (url.searchParams.get("error") === "access_denied") {
             evento = "oauth_rechazado";
             return redirigirOAuth(respuesta, "cancelado");
           }
           const codigos = url.searchParams.getAll("code");
           if (url.searchParams.has("error") || codigos.length !== 1 || !codigos[0] || codigos[0].length > 4096) {
-            throw new ErrorOAuth("OAUTH_INVALIDO");
+            throw new ErrorOAuth("OAUTH_INVALIDO", "respuesta_google_invalida");
           }
           const perfil = await google.verificar(codigos[0], intento);
           const usuario = await logica.autenticarGoogle(perfil);
@@ -293,6 +294,7 @@ async function exigirUsuario(peticion) {
         } catch (error) {
           evento = error instanceof ErrorOAuth || error instanceof ErrorUsuarios ? "oauth_rechazado" : "error_oauth";
           actividad.codigo = error?.codigo;
+          actividad.diagnostico = error?.diagnostico;
           return redirigirOAuth(respuesta, error instanceof ErrorUsuarios && error.codigo === "OAUTH_CUENTA_EXISTENTE" ? "cuenta_existente" : "error");
         }
       }
