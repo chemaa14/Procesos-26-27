@@ -7,6 +7,30 @@ export class DatosUsuariosPostgres {
     this.pool = pool;
   }
 
+  async buscarPorGoogleSub(sub) {
+    const { rows } = await this.pool.query(`SELECT ${CAMPOS} FROM usuarios WHERE google_sub = $1`, [sub]);
+    return rows[0] ?? null;
+  }
+
+  async crearConGoogle(usuario, sub) {
+    try {
+      const { rows } = await this.pool.query(
+        `INSERT INTO usuarios (id, nombre, email, confirmado, eliminado, rol, google_sub)
+         VALUES ($1, $2, $3, TRUE, FALSE, 'usuario', $4) RETURNING ${CAMPOS}`,
+        [usuario.id, usuario.nombre, usuario.email, sub]
+      );
+      return rows[0];
+    } catch (error) {
+      if (error.code === "23505" && error.constraint === "usuarios_google_sub_unico") {
+        throw new ErrorDatos("GOOGLE_DUPLICADO", "Identidad existente.");
+      }
+      if (error.code === "23505" && error.constraint === "usuarios_email_unico") {
+        throw new ErrorDatos("EMAIL_DUPLICADO", "Correo existente.");
+      }
+      throw error;
+    }
+  }
+
   async guardar(usuario) {
     try {
       const resultado = await this.pool.query(

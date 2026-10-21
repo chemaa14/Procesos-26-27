@@ -95,3 +95,64 @@ test("PostgreSQL conserva el usuario y su hash entre conexiones", async () => {
     }
   }
 });
+// Usa dos pools para representar dos instancias distintas de Cloud Run.
+test("PostgreSQL comparte identidad Google, sesiones e intentos de un solo uso", async () => {
+  const { LogicaUsuarios } = await import("../Servidor/logica.js");
+  const { SesionesPostgres, hashToken } = await import("../Servidor/sesiones-postgres.js");
+  const { IntentosOAuthPostgres } = await import("../Servidor/intentos-oauth.js");
+  const { crearValorOAuth } = await import("../Servidor/google-oauth.js");
+  const idPrueba = randomUUID();
+  const perfil = { sub: `prueba-${idPrueba}`, email: `oauth-${idPrueba}@example.com`, nombre: "Google de prueba", emailVerificado: true };
+  const poolA = crearPool();
+  const poolB = crearPool();
+  const datosA = new DatosUsuariosPostgres(poolA);
+  const datosB = new DatosUsuariosPostgres(poolB);
+  const logicaA = new LogicaUsuarios(datosA);
+  const logicaB = new LogicaUsuarios(datosB);
+  const sesionesA = new SesionesPostgres(poolA);
+  const sesionesB = new SesionesPostgres(poolB);
+  const intentosA = new IntentosOAuthPostgres(poolA);
+  const intentosB = new IntentosOAuthPostgres(poolB);
+  const estado = crearValorOAuth(), navegador = crearValorOAuth();
+  const intento = { nonce: crearValorOAuth(), verificador: crearValorOAuth() };
+  try {
+    const [a, b] = await Promise.all([logicaA.autenticarGoogle(perfil), logicaB.autenticarGoogle(perfil)]);
+    assert.equal(a.id, b.id);
+    assert.equal(a.confirmado, true);
+    assert.equal(a.rol, "usuario");
+    assert.equal(await datosB.buscarHashPassword(a.id), null);
+    assert.deepEqual(await datosB.buscarPorGoogleSub(perfil.sub), a);
+    await assert.rejects(logicaB.autenticarGoogle({ ...perfil, sub: `otro-${idPrueba}` }), { codigo: "OAUTH_CUENTA_EXISTENTE" });
+
+    const token = await sesionesA.crear(a.id);
+    assert.equal((await sesionesB.obtener(token)).usuarioId, a.id);
+    assert.equal((await poolB.query("SELECT token_hash FROM sesiones WHERE usuario_id=$1", [a.id])).rows[0].token_hash, hashToken(token));
+    await sesionesB.eliminar(token);
+    assert.equal(await sesionesA.obtener(token), null);
+    const token2 = await sesionesA.crear(a.id);
+    await poolB.query("UPDATE sesiones SET caduca_en=NOW()-INTERVAL '1 second' WHERE token_hash=$1", [hashToken(token2)]);
+    assert.equal(await sesionesA.obtener(token2), null);
+    const token3 = await sesionesA.crear(a.id);
+    await sesionesB.eliminarDeUsuario(a.id);
+    assert.equal(await sesionesA.obtener(token3), null);
+
+    await intentosA.guardar(estado, navegador, intento);
+    assert.equal(await intentosB.consumir(estado, crearValorOAuth()), null);
+    const consumos = await Promise.all([intentosA.consumir(estado, navegador), intentosB.consumir(estado, navegador)]);
+    assert.equal(consumos.filter(Boolean).length, 1);
+    assert.deepEqual(consumos.find(Boolean), intento);
+    await intentosA.guardar(estado, navegador, intento);
+    await poolB.query("UPDATE intentos_oauth SET caduca_en=NOW()-INTERVAL '1 second' WHERE estado_hash=$1", [hashToken(estado)]);
+    assert.equal(await intentosB.consumir(estado, navegador), null);
+
+    await datosA.guardar({ ...a, rol: "administrador" });
+    assert.equal((await logicaB.autenticarGoogle(perfil)).rol, "administrador");
+    await logicaA.eliminar(a.id);
+    await assert.rejects(logicaB.autenticarGoogle(perfil), { codigo: "OAUTH_INVALIDO" });
+  } finally {
+    try {
+      await poolA.query("DELETE FROM intentos_oauth WHERE estado_hash=$1", [hashToken(estado)]);
+      await poolA.query("DELETE FROM usuarios WHERE email=$1", [perfil.email]);
+    } finally { await Promise.all([poolA.end(), poolB.end()]); }
+  }
+});

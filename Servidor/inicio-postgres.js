@@ -1,3 +1,6 @@
+import { crearGoogleOAuth } from "./google-oauth.js";
+import { SesionesPostgres } from "./sesiones-postgres.js";
+import { IntentosOAuthPostgres } from "./intentos-oauth.js";
 import { crearRegistroActividad } from "./actividad.js";
 import { once } from "node:events";
 import { crearAplicacion } from "./api.js";
@@ -11,10 +14,13 @@ let servidor;
 try {
   pool = crearPool({ registrarActividad });
   // Comprueba la conexión y que la tabla está preparada.
-  await pool.query("SELECT id, rol FROM usuarios LIMIT 0");
+  await pool.query("SELECT id, rol, google_sub FROM usuarios LIMIT 0");
 
+  await pool.query("SELECT token_hash FROM sesiones LIMIT 0");
+  await pool.query("SELECT estado_hash FROM intentos_oauth LIMIT 0");
   const datos = new DatosUsuariosPostgres(pool);
-  const aplicacion = crearAplicacion({ datos, registrarActividad });
+  const aplicacion = crearAplicacion({ datos, registrarActividad, google: crearGoogleOAuth(),
+    sesiones: new SesionesPostgres(pool), intentosOAuth: new IntentosOAuthPostgres(pool) });
   servidor = aplicacion.servidor;
 
   const puerto = Number(process.env.PORT || 3000);

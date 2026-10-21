@@ -133,3 +133,8 @@ export function eliminarUsuario(id) {
     metodo: "DELETE"
   });
 }
+
+// El servidor prepara el intento y la cookie; el navegador visita Google.
+export async function prepararAccesoGoogle() {
+  return (await realizarPeticion("/api/auth/google", { metodo: "POST" })).url;
+}

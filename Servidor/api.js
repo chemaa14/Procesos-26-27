@@ -1,3 +1,5 @@
+import { ErrorOAuth, crearValorOAuth } from "./google-oauth.js";
+import { IntentosOAuth } from "./intentos-oauth.js";
 import { randomUUID } from "node:crypto";
 import { crearRegistroActividad, rutaParaRegistro } from "./actividad.js";
 import { createServer } from "node:http";
@@ -146,7 +148,24 @@ function escribirCookieSesion(respuesta, token, segura) {
     atributos.push("Secure");
   }
 
-  respuesta.setHeader("Set-Cookie", atributos.join("; "));
+  respuesta.appendHeader("Set-Cookie", atributos.join("; "));
+}
+
+const COOKIE_OAUTH = "cinematch_oauth";
+function cookieOAuth(respuesta, valor, segura) {
+  respuesta.appendHeader("Set-Cookie", `${COOKIE_OAUTH}=${valor ?? ""}; Path=/api/auth/google; HttpOnly; SameSite=Lax; Max-Age=${valor ? 600 : 0}${segura ? "; Secure" : ""}`);
+}
+function leerCookieOAuth(peticion) {
+  const valores = (peticion.headers.cookie ?? "").split(";").map(v => v.trim())
+    .filter(v => v.startsWith(`${COOKIE_OAUTH}=`));
+  const valor = valores.length === 1 ? valores[0].slice(COOKIE_OAUTH.length + 1) : "";
+  return /^[a-f0-9]{64}$/.test(valor) ? valor : null;
+}
+function redirigirOAuth(respuesta, resultado) {
+  respuesta.writeHead(303, {
+    Location: `/?oauth=${resultado}`, "Cache-Control": "no-store", "Referrer-Policy": "no-referrer"
+  });
+  respuesta.end();
 }
 
 function comprobarCabeceraCliente(peticion) {
@@ -158,19 +177,20 @@ function comprobarCabeceraCliente(peticion) {
 export function crearAplicacion({
   cookieSegura = process.env.NODE_ENV === "production",
   datos = new DatosUsuarios(),
+  google = null,
+  intentosOAuth = new IntentosOAuth(),
+  sesiones = new Sesiones({ duracionMs: DURACION_SESION_SEGUNDOS * 1000 }),
   registrarActividad = crearRegistroActividad()
 } = {})
  {
 
   const logica = new LogicaUsuarios(datos);
 
-  const sesiones = new Sesiones({
-  duracionMs: DURACION_SESION_SEGUNDOS * 1000
-});
+
 
 async function exigirUsuario(peticion) {
   const token = leerTokenSesion(peticion);
-  const sesion = sesiones.obtener(token);
+  const sesion = await sesiones.obtener(token);
 
   if (!sesion) {
     throw new ErrorHTTP(401, "Se requiere una sesión válida.");
@@ -179,7 +199,7 @@ async function exigirUsuario(peticion) {
   const usuario = await datos.buscarPorId(sesion.usuarioId);
 
   if (!usuario || !usuario.confirmado || usuario.eliminado) {
-    sesiones.eliminarDeUsuario(sesion.usuarioId);
+    await sesiones.eliminarDeUsuario(sesion.usuarioId);
     throw new ErrorHTTP(401, "Se requiere una sesión válida.");
   }
 
@@ -226,6 +246,56 @@ async function exigirUsuario(peticion) {
       const ruta = url.pathname;
       actividad.ruta = rutaParaRegistro(ruta);
       const metodo = peticion.method;
+
+      if (ruta === "/api/auth/google") {
+        if (metodo !== "POST") return metodoNoPermitido(respuesta, "POST");
+        comprobarCabeceraCliente(peticion);
+        if (!google) return responderJSON(respuesta, 503, { error: "El acceso con Google aún no está disponible." });
+        if (peticion.headers.origin && peticion.headers.origin !== google.origen) {
+          throw new ErrorHTTP(403, "Petición no permitida.");
+        }
+        const estado = crearValorOAuth();
+        const navegador = crearValorOAuth();
+        const intento = { nonce: crearValorOAuth(), verificador: crearValorOAuth() };
+        await intentosOAuth.guardar(estado, navegador, intento);
+        cookieOAuth(respuesta, navegador, cookieSegura);
+        return responderJSON(respuesta, 200, { url: google.generarURL({ estado, ...intento }) });
+      }
+
+      if (ruta === "/api/auth/google/callback") {
+        if (metodo !== "GET") return metodoNoPermitido(respuesta, "GET");
+        cookieOAuth(respuesta, null, cookieSegura);
+        try {
+          if (!google) throw new ErrorOAuth("OAUTH_INVALIDO");
+          const estados = url.searchParams.getAll("state");
+          const navegador = leerCookieOAuth(peticion);
+          if (estados.length !== 1 || !/^[a-f0-9]{64}$/.test(estados[0]) || !navegador) {
+            throw new ErrorOAuth("OAUTH_INVALIDO");
+          }
+          const intento = await intentosOAuth.consumir(estados[0], navegador);
+          if (!intento) throw new ErrorOAuth("OAUTH_INVALIDO");
+          if (url.searchParams.get("error") === "access_denied") {
+            evento = "oauth_rechazado";
+            return redirigirOAuth(respuesta, "cancelado");
+          }
+          const codigos = url.searchParams.getAll("code");
+          if (url.searchParams.has("error") || codigos.length !== 1 || !codigos[0] || codigos[0].length > 4096) {
+            throw new ErrorOAuth("OAUTH_INVALIDO");
+          }
+          const perfil = await google.verificar(codigos[0], intento);
+          const usuario = await logica.autenticarGoogle(perfil);
+          await sesiones.eliminar(leerTokenSesion(peticion));
+          const token = await sesiones.crear(usuario.id);
+          escribirCookieSesion(respuesta, token, cookieSegura);
+          evento = "login_correcto";
+          actividad.usuarioId = usuario.id;
+          return redirigirOAuth(respuesta, "correcto");
+        } catch (error) {
+          evento = error instanceof ErrorOAuth || error instanceof ErrorUsuarios ? "oauth_rechazado" : "error_oauth";
+          actividad.codigo = error?.codigo;
+          return redirigirOAuth(respuesta, error instanceof ErrorUsuarios && error.codigo === "OAUTH_CUENTA_EXISTENTE" ? "cuenta_existente" : "error");
+        }
+      }
 
       if (ruta === "/api/prueba/email") {
         if (metodo !== "POST") return metodoNoPermitido(respuesta, "POST");
@@ -286,9 +356,9 @@ async function exigirUsuario(peticion) {
           });
 
           // Un nuevo login sustituye la sesión anterior de este navegador.
-          sesiones.eliminar(leerTokenSesion(peticion));
+          await sesiones.eliminar(leerTokenSesion(peticion));
 
-          const token = sesiones.crear(usuario.id);
+          const token = await sesiones.crear(usuario.id);
 
           escribirCookieSesion(respuesta, token, cookieSegura);
           evento = "login_correcto";
@@ -315,10 +385,10 @@ async function exigirUsuario(peticion) {
 
           comprobarCabeceraCliente(peticion);
 
-          const sesionActual = sesiones.obtener(leerTokenSesion(peticion));
+          const sesionActual = await sesiones.obtener(leerTokenSesion(peticion));
           actividad.usuarioId = sesionActual?.usuarioId;
           evento = "logout";
-          sesiones.eliminar(leerTokenSesion(peticion));
+          await sesiones.eliminar(leerTokenSesion(peticion));
           escribirCookieSesion(respuesta, null, cookieSegura);
 
           respuesta.writeHead(204, {
@@ -345,7 +415,7 @@ async function exigirUsuario(peticion) {
             actividad.objetivoId = usuario.id;
 
             // Invalida todas las sesiones de esta cuenta.
-            sesiones.eliminarDeUsuario(usuario.id);
+            await sesiones.eliminarDeUsuario(usuario.id);
 
             // Borra también la cookie de este navegador.
             escribirCookieSesion(respuesta, null, cookieSegura);
@@ -425,7 +495,7 @@ async function exigirUsuario(peticion) {
         if (actor.id === rutaUsuario[1]) {
           escribirCookieSesion(respuesta, null, cookieSegura);
         }
-        sesiones.eliminarDeUsuario(rutaUsuario[1]);
+        await sesiones.eliminarDeUsuario(rutaUsuario[1]);
         
         respuesta.writeHead(204, { "Cache-Control": "no-store" });
         return respuesta.end();

@@ -1,4 +1,5 @@
 import {
+  prepararAccesoGoogle,
   obtenerEstadoServidor,
   registrarUsuario,
   iniciarSesion,
@@ -304,5 +305,35 @@ botonActualizar.addEventListener("click", async () => {
   try { await cargarUsuarios(); } finally { cambiarOcupado(false); }
 });
 
-comprobarServidor();
-recuperarSesion();
+document.getElementById("entrar-google").addEventListener("click", async () => {
+  if (ocupado) return;
+  cambiarOcupado(true);
+  mostrarMensaje("Abriendo Google...");
+  try {
+    const destino = await prepararAccesoGoogle();
+    window.location.assign(destino);
+  } catch (error) {
+    mostrarMensaje(error.message, true);
+    cambiarOcupado(false);
+  }
+});
+
+async function iniciarInterfaz() {
+  // Solo mostramos mensajes conocidos, nunca el texto devuelto por el proveedor.
+  const url = new URL(window.location.href);
+  const resultado = url.searchParams.get("oauth");
+  if (resultado !== null) {
+    url.searchParams.delete("oauth");
+    window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+  }
+  comprobarServidor();
+  await recuperarSesion();
+  const mensajes = {
+    cancelado: "Has cancelado el acceso con Google. Puedes volver a intentarlo.",
+    cuenta_existente: "Ya existe una cuenta con ese correo. Entra con tu contraseña; las cuentas no se vinculan automáticamente.",
+    error: "No se pudo completar el acceso con Google. Vuelve a intentarlo desde este navegador."
+  };
+  if (resultado === "correcto" && usuarioActual) mostrarMensaje("Sesión iniciada con Google.");
+  else if (resultado && Object.hasOwn(mensajes, resultado)) mostrarMensaje(mensajes[resultado], true);
+}
+iniciarInterfaz();
