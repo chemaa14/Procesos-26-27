@@ -31,6 +31,12 @@ const RUTAS = new Set([
 ]);
 const METODOS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DIAGNOSTICOS_OAUTH = new Set([
+  "proveedor_desactivado", "cookie_ausente", "estado_invalido", "intento_no_valido",
+  "respuesta_google_invalida", "intercambio_codigo", "token_ausente",
+  "validacion_token", "validacion_perfil", "google_invalid_client",
+  "google_invalid_grant", "google_redirect_uri_mismatch", "google_unauthorized_client"
+]);
 const CODIGOS = new Set([
   "NOMBRE_INVALIDO", "EMAIL_INVALIDO", "PASSWORD_INVALIDA", "EMAIL_DUPLICADO",
   "USUARIO_NO_ENCONTRADO", "USUARIO_ELIMINADO", "CREDENCIALES_INVALIDAS",
@@ -67,6 +73,7 @@ export function crearRegistroActividad({ escribir = linea => console.log(linea),
       if (typeof campos.duracionMs === "number" && Number.isFinite(campos.duracionMs) && campos.duracionMs >= 0) {
         registro.duracionMs = Math.round(campos.duracionMs * 100) / 100;
       }
+      if (DIAGNOSTICOS_OAUTH.has(campos.diagnostico)) registro.diagnostico = campos.diagnostico;
       if (CODIGOS.has(campos.codigo)) registro.codigo = campos.codigo;
       if (Number.isInteger(campos.puerto) && campos.puerto >= 1 && campos.puerto <= 65535) registro.puerto = campos.puerto;
       escribir(JSON.stringify(registro));

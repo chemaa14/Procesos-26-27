@@ -2,7 +2,7 @@ import { OAuth2Client } from "google-auth-library";
 import { createHash, randomBytes } from "node:crypto";
 
 export class ErrorOAuth extends Error {
-  constructor(codigo) { super(codigo); this.codigo = codigo; }
+  constructor(codigo, diagnostico) { super(codigo); this.codigo = codigo; this.diagnostico = diagnostico; }
 }
 
 export function crearGoogleOAuth(env = process.env) {
@@ -37,20 +37,34 @@ export function crearGoogleOAuth(env = process.env) {
       });
     },
     async verificar(codigo, { nonce, verificador }) {
+      let etapa = "intercambio_codigo";
       try {
         const { tokens } = await cliente.getToken({ code: codigo, codeVerifier: verificador });
+        etapa = "token_ausente";
         if (!tokens.id_token) throw new ErrorOAuth("OAUTH_INVALIDO");
         // La librería comprueba firma, emisor, audiencia y caducidad.
+        etapa = "validacion_token";
         const ticket = await cliente.verifyIdToken({ idToken: tokens.id_token, audience: env.GOOGLE_CLIENT_ID });
         const perfil = ticket.getPayload();
+        etapa = "validacion_perfil";
         if (!perfil || perfil.nonce !== nonce || perfil.email_verified !== true ||
             typeof perfil.sub !== "string" || !perfil.sub || typeof perfil.email !== "string") {
           throw new ErrorOAuth("OAUTH_INVALIDO");
         }
         return { sub: perfil.sub, email: perfil.email, nombre: perfil.name || perfil.email, emailVerificado: true };
-      } catch {
+      } catch (error) {
+        const erroresProveedor = {
+          invalid_client: "google_invalid_client",
+          invalid_grant: "google_invalid_grant",
+          redirect_uri_mismatch: "google_redirect_uri_mismatch",
+          unauthorized_client: "google_unauthorized_client"
+        };
+        const codigoProveedor = error?.response?.data?.error;
+        const diagnostico = etapa === "intercambio_codigo" &&
+          typeof codigoProveedor === "string" && Object.hasOwn(erroresProveedor, codigoProveedor)
+          ? erroresProveedor[codigoProveedor] : etapa;
         // Nunca propagar errores del proveedor: pueden incluir tokens o el secreto.
-        throw new ErrorOAuth("OAUTH_INVALIDO");
+        throw new ErrorOAuth("OAUTH_INVALIDO", diagnostico);
       }
     }
   };
