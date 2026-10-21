@@ -4,6 +4,8 @@ const MENSAJES = Object.freeze({
   peticion_interrumpida: "La conexión se cerró antes de completar la respuesta.",
   usuario_registrado: "Cuenta registrada pendiente de confirmación.",
   usuario_creado: "Cuenta creada desde administración.",
+  oauth_rechazado: "Acceso con Google cancelado o rechazado.",
+  error_oauth: "Error interno durante el acceso con Google.",
   login_correcto: "Inicio de sesión correcto.",
   login_rechazado: "Inicio de sesión rechazado.",
   logout: "Cierre de sesión procesado.",
@@ -23,6 +25,7 @@ const MENSAJES = Object.freeze({
 });
 const RUTAS = new Set([
   "/", "/gui.js", "/rest.js", "/api/health", "/api/registro", "/api/login",
+  "/api/auth/google", "/api/auth/google/callback",
   "/api/logout", "/api/sesion", "/api/perfil", "/api/usuarios",
   "/api/usuarios/:id", "/api/usuarios/:id/activo", "otra"
 ]);
@@ -31,6 +34,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CODIGOS = new Set([
   "NOMBRE_INVALIDO", "EMAIL_INVALIDO", "PASSWORD_INVALIDA", "EMAIL_DUPLICADO",
   "USUARIO_NO_ENCONTRADO", "USUARIO_ELIMINADO", "CREDENCIALES_INVALIDAS",
+  "OAUTH_INVALIDO", "OAUTH_CUENTA_EXISTENTE",
   "SESION_INVALIDA", "PERMISO_DENEGADO", "CONFIGURACION_INVALIDA",
   "23505", "23514", "28P01", "3D000", "42P01", "42703", "42501",
   "ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "EADDRINUSE"
@@ -51,7 +55,7 @@ export function crearRegistroActividad({ escribir = linea => console.log(linea),
       const estado = Number.isInteger(campos.estado) && campos.estado >= 100 && campos.estado <= 599
         ? campos.estado : undefined;
       const severity = evento.startsWith("error_") || estado >= 500 ? "ERROR"
-        : estado >= 400 || ["login_rechazado", "acceso_denegado", "peticion_interrumpida"].includes(evento)
+        : estado >= 400 || ["oauth_rechazado", "login_rechazado", "acceso_denegado", "peticion_interrumpida"].includes(evento)
           ? "WARNING" : "INFO";
       const registro = { time: reloj().toISOString(), severity, evento, message: MENSAJES[evento] };
       if (estado !== undefined) registro.estado = estado;

@@ -79,6 +79,38 @@ export class LogicaUsuarios {
     }
   }
 
+  // Solo recibe perfiles ya verificados por el adaptador de Google del servidor.
+  async autenticarGoogle({ sub, email, nombre, emailVerificado } = {}) {
+    const denegado = () => new ErrorUsuarios("OAUTH_INVALIDO", "No se pudo iniciar sesión con Google.");
+    if (typeof sub !== "string" || !sub.trim() || sub.length > 255 || emailVerificado !== true) throw denegado();
+    const existente = await this.datos.buscarPorGoogleSub(sub);
+    if (existente) {
+      if (existente.eliminado || !existente.confirmado) throw denegado();
+      return existente;
+    }
+    const correo = normalizarEmail(email);
+    const conflicto = () => new ErrorUsuarios("OAUTH_CUENTA_EXISTENTE", "Ya existe una cuenta con ese correo. Entra con tu contraseña.");
+    if (await this.datos.buscarPorEmail(correo)) throw conflicto();
+    const usuario = {
+      id: randomUUID(), nombre: typeof nombre === "string" && nombre.trim() ? nombre.trim() : correo,
+      email: correo, rol: "usuario", confirmado: true, eliminado: false
+    };
+    try {
+      return await this.datos.crearConGoogle(usuario, sub);
+    } catch (error) {
+      if (error instanceof ErrorDatos && ["GOOGLE_DUPLICADO", "EMAIL_DUPLICADO"].includes(error.codigo)) {
+        // Una alta concurrente del mismo sub debe reutilizar la cuenta, no duplicarla.
+        const actual = await this.datos.buscarPorGoogleSub(sub);
+        if (actual) {
+          if (actual.eliminado || !actual.confirmado) throw denegado();
+          return actual;
+        }
+        throw conflicto();
+      }
+      throw error;
+    }
+  }
+
   async obtener(id) {
     const usuario = await this.datos.buscarPorId(id);
 

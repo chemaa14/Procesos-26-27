@@ -5,6 +5,24 @@ export class DatosUsuarios {
   constructor() {
     this.usuarios = new Map();
     this.passwords = new Map();
+    this.identidadesGoogle = new Map();
+  }
+
+  async buscarPorGoogleSub(sub) {
+    const id = this.identidadesGoogle.get(sub);
+    return id ? this.buscarPorId(id) : null;
+  }
+
+  async crearConGoogle(usuario, sub) {
+    if (this.identidadesGoogle.has(sub)) throw new ErrorDatos("GOOGLE_DUPLICADO", "Identidad existente.");
+    if ([...this.usuarios.values()].some(u => u.email === usuario.email)) {
+      throw new ErrorDatos("EMAIL_DUPLICADO", "Correo existente.");
+    }
+    if (this.usuarios.has(usuario.id)) throw new ErrorDatos("ID_DUPLICADO", "Identificador existente.");
+    const valido = this.validarRol(usuario);
+    this.usuarios.set(usuario.id, { ...valido });
+    this.identidadesGoogle.set(sub, usuario.id);
+    return { ...valido };
   }
 
   async guardar(usuario) {

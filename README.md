@@ -10,9 +10,11 @@ guardan en PostgreSQL. Hay roles `usuario` y `administrador`, comprobados en el
 servidor en cada petición. El administrador puede listar cuentas, consultar su
 estado y eliminar otras cuentas desde la interfaz.
 
-La confirmación por correo y OAuth están pendientes. En esta etapa, activo
-significa `confirmado && !eliminado`. Las sesiones siguen en memoria: se pierden
-al reiniciar y no se comparten entre instancias. Usuarios y roles sí persisten.
+El acceso con Google está implementado. Las cuentas nuevas de Google se crean
+confirmadas y con rol `usuario`. La confirmación por correo de las cuentas locales
+sigue pendiente. Activo significa `confirmado && !eliminado`. En el arranque
+con PostgreSQL, las sesiones y los intentos OAuth se comparten entre instancias
+y sobreviven a reinicios; las versiones en memoria se usan en pruebas.
 Los logs de actividad se emiten como JSON por la salida estándar.
 
 ## Arquitectura
@@ -25,6 +27,9 @@ Los logs de actividad se emiten como JSON por la salida estándar.
 - `Servidor/datos.js`: repositorio en memoria para pruebas.
 - `Servidor/datos-postgres.js`: repositorio persistente con consultas parametrizadas.
 - `Servidor/inicio-postgres.js`: arranque con PostgreSQL.
+- `Servidor/google-oauth.js`: adaptador de Google con `google-auth-library`.
+- `Servidor/intentos-oauth.js`: intentos de acceso de un solo uso y duración de 10 minutos.
+- `Servidor/sesiones-postgres.js`: sesiones de 8 horas, con el token almacenado como SHA-256.
 - `sql/`: migraciones, aplicadas en orden.
 
 JavaScript, Node.js 24, HTML y PostgreSQL 17. El backend sirve el frontend.
@@ -54,6 +59,7 @@ Mantener la contraseña existente si la base ya está creada.
 docker compose up -d --wait
 Get-Content -Raw -Encoding UTF8 .\sql\001-usuarios.sql | docker compose exec -T db psql -U cinematch -d cinematch -v ON_ERROR_STOP=1
 Get-Content -Raw -Encoding UTF8 .\sql\002-roles.sql | docker compose exec -T db psql -U cinematch -d cinematch -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 .\sql\003-oauth-google.sql | docker compose exec -T db psql -U cinematch -d cinematch -v ON_ERROR_STOP=1
 npm run start:postgres
 ```
 
@@ -137,7 +143,7 @@ npm test
 npm run test:postgres
 ```
 
-La segunda orden requiere PostgreSQL con ambas migraciones aplicadas. Comprueba
+La segunda orden requiere PostgreSQL con las tres migraciones (001, 002 y 003) aplicadas. Comprueba
 persistencia de usuario, hash y rol entre conexiones, restricciones de rol y
 borrado lógico. GitHub Actions prepara PostgreSQL y ejecuta ambos comandos.
 
@@ -151,7 +157,7 @@ Comprobación manual de interfaz:
 2. Iniciar sesión como administrador: debe mostrar nombre, correo, rol y estado.
 3. Cancelar una eliminación: la cuenta debe conservarse.
 4. Eliminar una cuenta de prueba: desaparece de la tabla y pierde su sesión.
-5. Recargar: se conserva la sesión mientras siga vivo el proceso del servidor.
+5. Recargar y reiniciar el servidor: PostgreSQL conserva la sesión durante sus 8 horas, salvo cierre de sesión o eliminación de la cuenta.
 
 ## Despliegue en Cloud Run
 
@@ -165,12 +171,20 @@ El servicio usa PostgreSQL en Cloud SQL. Configuración del entorno:
   acceso al contenido del secreto.
 
 **Antes de fusionar esta rama y desplegar el código nuevo**, ejecutar
-`sql/002-roles.sql` en la base `cinematch` de Cloud SQL con el propietario de la
+`sql/003-oauth-google.sql` (con 001 y 002 ya aplicadas) en la base `cinematch` de Cloud SQL con el propietario de la
 tabla. El usuario de ejecución de la aplicación no necesita permisos DDL.
 La migración es compatible con el código anterior y puede aplicarse antes.
-Después se habilita explícitamente la cuenta administradora que se vaya a usar.
+Las tablas nuevas necesitan permisos para el usuario de ejecución. Ejecutar
+con el propietario, en la base `cinematch`:
 
-El arranque comprueba que existen la tabla y la columna `rol` antes de escuchar.
+```sql
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE sesiones, intentos_oauth TO cinematch_app;
+```
+
+Las sesiones antiguas en memoria no se migran; habrá que entrar otra vez tras
+este primer despliegue. Los usuarios, sus roles y contraseñas se conservan.
+
+El arranque comprueba `usuarios.google_sub`, `sesiones` e `intentos_oauth` antes de escuchar.
 Tras el despliegue, buscar el evento JSON `servidor_iniciado` con `puerto: 8080`
 y comprobar login y permisos con una cuenta normal y otra administradora.
 
@@ -228,7 +242,7 @@ npm run start:postgres
 `npm test` incluye pruebas del formato, accesos, bajas, códigos HTTP,
 identificadores, fallos de base de datos y arranque, y exclusión de secretos
 (incluso en rutas desconocidas o parámetros de consulta). La prueba PostgreSQL
-requiere el Docker local y las migraciones 001 y 002, ya utilizadas en roles.
+requiere el Docker local y las migraciones 001, 002 y 003.
 
 Desde el navegador, iniciar sesión con una cuenta local confirmada, cerrar la
 sesión y realizar un intento con contraseña incorrecta. En la terminal deben
@@ -254,3 +268,99 @@ probar roles en la URL pública se debe registrar y habilitar una cuenta en esa
 base, siguiendo el procedimiento del primer administrador.
 
 Referencia: https://docs.cloud.google.com/run/docs/logging
+
+
+## Hito 4: acceso con Google
+
+### Configuración local
+
+En Google Auth Platform crear un cliente OAuth de tipo **Aplicación web**, con
+estas URI de redirección exactas (sin barra final):
+
+- `http://localhost:3000/api/auth/google/callback`
+- `https://cinematch-437102806627.europe-west1.run.app/api/auth/google/callback`
+
+Mantener OAuth en pruebas y añadir las cuentas que vayan a probarlo en Público →
+Usuarios de prueba. No es necesario configurar orígenes JavaScript para este flujo
+de redirección gestionado por el servidor.
+
+Añadir a tu `.env` existente, conservando las variables de PostgreSQL:
+
+```dotenv
+GOOGLE_CLIENT_ID=REEMPLAZAR_POR_EL_ID_DEL_CLIENTE
+GOOGLE_CLIENT_SECRET=REEMPLAZAR_POR_EL_SECRETO
+GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
+```
+
+`.env.example` solo contiene nombres y ejemplos. No subir `.env` ni el JSON de
+credenciales. Si las tres variables OAuth están vacías, el login local funciona
+y el botón de Google muestra que el servicio no está disponible. Configuración
+parcial produce `CONFIGURACION_INVALIDA` al arrancar. En local abrir exactamente
+`http://localhost:3000`, y mantener `NODE_ENV` en desarrollo (no producción).
+
+### Flujo y decisiones
+
+1. `Cliente/gui.js` escucha el botón y llama a `prepararAccesoGoogle()` en
+   `Cliente/rest.js`. Este envía POST `/api/auth/google` con `X-CineMatch: 1`.
+2. `Servidor/api.js` genera `state`, `nonce`, verificador PKCE y una cookie
+   temporal HttpOnly/SameSite=Lax (Secure en producción). Guarda el intento en
+   PostgreSQL con caducidad de 10 minutos y devuelve la URL de Google.
+3. El navegador visita Google. Google devuelve un código al GET
+   `/api/auth/google/callback`. El servidor consume el intento atómicamente,
+   comprobando `state` y la cookie del navegador, y canjea el código con PKCE.
+4. `google-auth-library` comprueba firma, emisor, audiencia y caducidad del ID
+   token. El adaptador comprueba también `nonce` y `email_verified`.
+5. `LogicaUsuarios.autenticarGoogle()` busca por `sub`, la identidad estable de
+   Google. Si es nueva, crea la cuenta confirmada con rol `usuario` y sin hash
+   de contraseña. Rechaza las cuentas eliminadas. Nunca toma el rol del cliente.
+6. El servidor crea su propia sesión de 8 horas y redirige a `/`. La interfaz
+   recupera `/api/sesion`. Los tokens de Google no se entregan al frontend ni
+   se guardan en logs, localStorage o la base de datos.
+
+**Coincidencia de correos:** si existe una cuenta local con el mismo correo,
+se solicita entrar con la contraseña. No se confirma ni vincula automáticamente.
+La vinculación de cuentas queda fuera de esta rama. Un cambio de correo en Google
+no crea otra cuenta: la identidad se mantiene por `sub`; el correo local no se
+actualiza automáticamente. El registro local sigue pendiente de confirmación por
+correo, que se implementará en la siguiente rama.
+
+Las sesiones guardan solo el identificador del usuario: los permisos y la
+eliminación se vuelven a comprobar contra la base en cada petición. Los intentos
+OAuth se consumen una sola vez; sesiones e intentos caducados se limpian al crear
+otros nuevos. Un fallo del proveedor o una cancelación muestran mensajes conocidos,
+sin reflejar textos externos ni códigos/tokens en la URL final.
+
+### Cloud Run
+
+Aplicar la migración 003 y los permisos descritos en Despliegue antes del merge.
+Configurar estas variables en Cloud Run:
+
+- `GOOGLE_CLIENT_ID`: ID del cliente web.
+- `GOOGLE_REDIRECT_URI`: la URI pública exacta indicada arriba.
+- `GOOGLE_CLIENT_SECRET`: referencia a un secreto de Secret Manager, por ejemplo
+  `cinematch-google-client-secret`, versión 1. Dar acceso a ese secreto a la cuenta
+  de servicio de Cloud Run, igual que se hizo con la contraseña de la base.
+
+No cambiar `DB_*`, la conexión Cloud SQL ni la cuenta de servicio. El código usa
+la URI de configuración y no construye redirecciones a partir de la cabecera Host.
+El navegador solo necesita recibir las cookies y la URL de autorización; el secreto
+se utiliza exclusivamente en el servidor.
+
+### Validación
+
+- `npm test`: incluye pruebas OAuth con proveedor simulado y tokens RSA firmados
+  para comprobar firma, emisor, audiencia, expiración, nonce y correo verificado;
+  también cancelación, replay, protección del inicio, conflictos de cuentas,
+  borrado, rol y ausencia de secretos en logs. No requiere credenciales de Google.
+- `npm run test:postgres`: incluye el contrato persistente entre dos pools,
+  altas concurrentes, identidad Google, revocación/caducidad de sesiones e intento
+  de un solo uso. Requiere la migración 003.
+- Manual: entrar con una cuenta de prueba de Google cuyo correo no exista como
+  cuenta local; comprobar perfil, recarga, reinicio, cierre y nuevo login. Repetir
+  en la URL pública. Cancelar Google y verificar que aparece un mensaje claro.
+  Una cuenta local con el mismo correo debe conservar su estado y contraseña.
+
+Referencias técnicas:
+- https://developers.google.com/identity/protocols/oauth2/web-server
+- https://developers.google.com/identity/openid-connect/openid-connect
+- https://github.com/googleapis/google-auth-library-nodejs
