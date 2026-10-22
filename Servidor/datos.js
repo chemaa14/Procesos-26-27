@@ -10,12 +10,13 @@ export class DatosUsuarios {
 
   async buscarPorGoogleSub(sub) {
     const id = this.identidadesGoogle.get(sub);
-    return id ? this.buscarPorId(id) : null;
+    const usuario = id ? await this.buscarPorId(id) : null;
+    return usuario && !usuario.eliminado ? usuario : null;
   }
 
   async crearConGoogle(usuario, sub) {
-    if (this.identidadesGoogle.has(sub)) throw new ErrorDatos("GOOGLE_DUPLICADO", "Identidad existente.");
-    if ([...this.usuarios.values()].some(u => u.email === usuario.email)) {
+    if (this.usuarios.get(this.identidadesGoogle.get(sub))?.eliminado === false) throw new ErrorDatos("GOOGLE_DUPLICADO", "Identidad existente.");
+    if ([...this.usuarios.values()].some(u => !u.eliminado && u.email === usuario.email)) {
       throw new ErrorDatos("EMAIL_DUPLICADO", "Correo existente.");
     }
     if (this.usuarios.has(usuario.id)) throw new ErrorDatos("ID_DUPLICADO", "Identificador existente.");
@@ -29,7 +30,7 @@ export class DatosUsuarios {
     usuario = this.validarRol(usuario);
     // Comprobar y guardar sin await evita altas simultáneas con el mismo correo.
     const duplicado = [...this.usuarios.values()].some(
-      (existente) => existente.email === usuario.email && existente.id !== usuario.id
+      (existente) => !existente.eliminado && !usuario.eliminado && existente.email === usuario.email && existente.id !== usuario.id
     );
     if (duplicado) {
       throw new ErrorDatos("EMAIL_DUPLICADO", "Ya existe un usuario con ese correo.");
@@ -53,7 +54,7 @@ export class DatosUsuarios {
 
   async buscarPorEmail(email) {
     const usuario = [...this.usuarios.values()].find(
-      (usuario) => usuario.email === email
+      (usuario) => !usuario.eliminado && usuario.email === email
     );
 
     return usuario ? { ...usuario } : null;
@@ -76,7 +77,7 @@ export class DatosUsuarios {
   async crearConHash(usuario, hash) {
   usuario = this.validarRol(usuario);
   const duplicado = [...this.usuarios.values()].some(
-    (existente) => existente.email === usuario.email
+    (existente) => !existente.eliminado && !usuario.eliminado && existente.email === usuario.email
   );
 
   if (duplicado) {

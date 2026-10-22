@@ -32,7 +32,7 @@ test("rechaza contraseñas con formato o longitud no válidos", async () => {
   for (const password of [undefined, null, 123, "", "corta", "a".repeat(129)]) {
     await assert.rejects(
       () => generarHash(password),
-      /entre 15 y 128 caracteres/
+      /entre 8 y 128 caracteres/
     );
   }
 });

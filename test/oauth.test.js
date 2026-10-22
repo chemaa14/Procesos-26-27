@@ -47,13 +47,15 @@ test("Google no vincula ni confirma una cuenta local del mismo correo", async ()
   assert.equal(await datos.buscarPorGoogleSub(perfil.sub), null);
 });
 
-test("Google rechaza perfiles sin verificar y cuentas eliminadas sin reactivarlas", async () => {
+test("Google rechaza perfiles sin verificar y crea otra cuenta tras una baja", async () => {
   const logica = new LogicaUsuarios(new DatosUsuarios());
   await assert.rejects(logica.autenticarGoogle({ ...perfil, emailVerificado: false }), { codigo: "OAUTH_INVALIDO" });
   await assert.rejects(logica.autenticarGoogle({ ...perfil, sub: "" }), { codigo: "OAUTH_INVALIDO" });
   const usuario = await logica.autenticarGoogle(perfil);
   await logica.eliminar(usuario.id);
-  await assert.rejects(logica.autenticarGoogle(perfil), { codigo: "OAUTH_INVALIDO" });
+  const nueva = await logica.autenticarGoogle(perfil);
+  assert.notEqual(nueva.id, usuario.id);
+  assert.equal(nueva.rol, "usuario");
   assert.equal((await logica.obtener(usuario.id)).eliminado, true);
 });
 
