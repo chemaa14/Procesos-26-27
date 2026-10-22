@@ -11,8 +11,8 @@ servidor en cada petición. El administrador puede listar cuentas, consultar su
 estado y eliminar otras cuentas desde la interfaz.
 
 El acceso con Google está implementado. Las cuentas nuevas de Google se crean
-confirmadas y con rol `usuario`. La confirmación por correo de las cuentas locales
-sigue pendiente. Activo significa `confirmado && !eliminado`. En el arranque
+confirmadas y con rol `usuario`. Las cuentas locales reciben un enlace de confirmación mediante Gmail SMTP,
+con caducidad de 24 horas y un solo uso. Activo significa `confirmado && !eliminado`. En el arranque
 con PostgreSQL, las sesiones y los intentos OAuth se comparten entre instancias
 y sobreviven a reinicios; las versiones en memoria se usan en pruebas.
 Los logs de actividad se emiten como JSON por la salida estándar.
@@ -27,6 +27,9 @@ Los logs de actividad se emiten como JSON por la salida estándar.
 - `Servidor/datos.js`: repositorio en memoria para pruebas.
 - `Servidor/datos-postgres.js`: repositorio persistente con consultas parametrizadas.
 - `Servidor/inicio-postgres.js`: arranque con PostgreSQL.
+- `Servidor/confirmaciones.js`: reglas de emisión y confirmación.
+- `Servidor/confirmaciones-postgres.js`: tokens y límites persistentes, con transacciones.
+- `Servidor/correo.js`: envío con Nodemailer y Gmail SMTP mediante TLS.
 - `Servidor/google-oauth.js`: adaptador de Google con `google-auth-library`.
 - `Servidor/intentos-oauth.js`: intentos de acceso de un solo uso y duración de 10 minutos.
 - `Servidor/sesiones-postgres.js`: sesiones de 8 horas, con el token almacenado como SHA-256.
@@ -51,6 +54,10 @@ DB_PORT=5433
 DB_NAME=cinematch
 DB_USER=cinematch
 DB_PASSWORD=REEMPLAZAR_POR_UNA_CLAVE_LOCAL
+SMTP_USER=TU_CUENTA@gmail.com
+SMTP_PASSWORD=CONTRASEÑA_DE_APLICACION_GMAIL
+APP_URL=http://localhost:3000
+NODE_ENV=development
 ```
 
 Mantener la contraseña existente si la base ya está creada.
@@ -60,6 +67,7 @@ docker compose up -d --wait
 Get-Content -Raw -Encoding UTF8 .\sql\001-usuarios.sql | docker compose exec -T db psql -U cinematch -d cinematch -v ON_ERROR_STOP=1
 Get-Content -Raw -Encoding UTF8 .\sql\002-roles.sql | docker compose exec -T db psql -U cinematch -d cinematch -v ON_ERROR_STOP=1
 Get-Content -Raw -Encoding UTF8 .\sql\003-oauth-google.sql | docker compose exec -T db psql -U cinematch -d cinematch -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 .\sql\004-confirmacion-correo.sql | docker compose exec -T db psql -U cinematch -d cinematch -v ON_ERROR_STOP=1
 npm run start:postgres
 ```
 
@@ -73,35 +81,23 @@ La migración 002 añade el rol sin borrar cuentas ni contraseñas y asigna
 
 ## Primer administrador y cuentas de prueba
 
-1. Registrar una cuenta desde la aplicación para que se genere su hash.
+1. Registrar una cuenta desde la aplicación y confirmarla mediante el correo recibido.
 2. Con una conexión de administración a la base correcta, sustituir el correo
    del ejemplo y ejecutar:
 
 ```sql
 UPDATE usuarios
-SET rol = 'administrador', confirmado = TRUE
+SET rol = 'administrador'
 WHERE email = 'tu-correo@example.com'
-  AND eliminado = FALSE AND password_hash IS NOT NULL
+  AND eliminado = FALSE AND confirmado = TRUE AND password_hash IS NOT NULL
 RETURNING id, email, rol, confirmado;
 ```
 
 Debe devolver exactamente la cuenta elegida. No incluir contraseñas en SQL,
-commits ni capturas. Esta confirmación manual es únicamente el procedimiento
-de pruebas mientras se implementa la verificación por correo.
+commits ni capturas. La promoción administrativa se hace explícitamente en SQL;
+el registro público siempre crea usuarios normales.
 
-Para habilitar una cuenta normal de prueba, usar otra cuenta registrada:
-
-```sql
-UPDATE usuarios SET confirmado = TRUE
-WHERE email = 'usuario-prueba@example.com'
-  AND eliminado = FALSE AND password_hash IS NOT NULL
-RETURNING id, email, rol, confirmado;
-```
-
-No existe una ruta pública para asignar roles. Registro y alta administrativa
-siempre crean usuarios con rol `usuario`; ignoran roles y estados enviados por
-el cliente. El primer administrador se habilita explícitamente, nunca de forma
-automática por ser la primera cuenta.
+Para una cuenta normal, registrarla y confirmar el enlace recibido por correo.
 
 ## API y permisos
 
@@ -143,7 +139,7 @@ npm test
 npm run test:postgres
 ```
 
-La segunda orden requiere PostgreSQL con las tres migraciones (001, 002 y 003) aplicadas. Comprueba
+La segunda orden requiere PostgreSQL con las cuatro migraciones (001, 002, 003 y 004) aplicadas. Comprueba
 persistencia de usuario, hash y rol entre conexiones, restricciones de rol y
 borrado lógico. GitHub Actions prepara PostgreSQL y ejecuta ambos comandos.
 
@@ -184,7 +180,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE sesiones, intentos_oauth TO cinema
 Las sesiones antiguas en memoria no se migran; habrá que entrar otra vez tras
 este primer despliegue. Los usuarios, sus roles y contraseñas se conservan.
 
-El arranque comprueba `usuarios.google_sub`, `sesiones` e `intentos_oauth` antes de escuchar.
+El arranque comprueba las tablas de usuarios, sesiones, intentos OAuth, confirmaciones
+y límites de correo, y valida la configuración SMTP antes de escuchar.
 Tras el despliegue, buscar el evento JSON `servidor_iniciado` con `puerto: 8080`
 y comprobar login y permisos con una cuenta normal y otra administradora.
 
@@ -242,7 +239,7 @@ npm run start:postgres
 `npm test` incluye pruebas del formato, accesos, bajas, códigos HTTP,
 identificadores, fallos de base de datos y arranque, y exclusión de secretos
 (incluso en rutas desconocidas o parámetros de consulta). La prueba PostgreSQL
-requiere el Docker local y las migraciones 001, 002 y 003.
+requiere el Docker local y las migraciones 001, 002, 003 y 004.
 
 Desde el navegador, iniciar sesión con una cuenta local confirmada, cerrar la
 sesión y realizar un intento con contraseña incorrecta. En la terminal deben
@@ -322,7 +319,7 @@ se solicita entrar con la contraseña. No se confirma ni vincula automáticament
 La vinculación de cuentas queda fuera de esta rama. Un cambio de correo en Google
 no crea otra cuenta: la identidad se mantiene por `sub`; el correo local no se
 actualiza automáticamente. El registro local sigue pendiente de confirmación por
-correo, que se implementará en la siguiente rama.
+correo; ahora puede confirmarse mediante el enlace enviado por Gmail.
 
 Las sesiones guardan solo el identificador del usuario: los permisos y la
 eliminación se vuelven a comprobar contra la base en cada petición. Los intentos
@@ -354,7 +351,7 @@ se utiliza exclusivamente en el servidor.
   borrado, rol y ausencia de secretos en logs. No requiere credenciales de Google.
 - `npm run test:postgres`: incluye el contrato persistente entre dos pools,
   altas concurrentes, identidad Google, revocación/caducidad de sesiones e intento
-  de un solo uso. Requiere la migración 003.
+  de un solo uso. Requiere las migraciones 003 y 004.
 - Manual: entrar con una cuenta de prueba de Google cuyo correo no exista como
   cuenta local; comprobar perfil, recarga, reinicio, cierre y nuevo login. Repetir
   en la URL pública. Cancelar Google y verificar que aparece un mensaje claro.
@@ -364,3 +361,90 @@ Referencias técnicas:
 - https://developers.google.com/identity/protocols/oauth2/web-server
 - https://developers.google.com/identity/openid-connect/openid-connect
 - https://github.com/googleapis/google-auth-library-nodejs
+
+## Confirmación por correo (Hito 4)
+
+El registro conserva la contraseña con scrypt y crea una cuenta pendiente.
+Después reserva un token aleatorio de 32 bytes y espera el resultado del envío
+SMTP antes de responder. La respuesta 201 contiene `usuario` y `correoEnviado`;
+si el envío falla, la cuenta permanece pendiente y se puede solicitar otro.
+SMTP aceptado no garantiza entrega en la bandeja de entrada: revisar spam.
+
+El correo incluye `APP_URL/#confirmar=TOKEN`. El fragmento no se envía en
+peticiones HTTP ni en Referer. La interfaz lo retira del historial y solo lo
+mantiene en memoria mientras está abierta la página. Al recargar antes de
+confirmar hay que abrir nuevamente el enlace del correo. La vista previa no
+confirma: se necesita pulsar **Confirmar cuenta**.
+
+- `POST /api/confirmacion`: JSON `{token}`, cabecera `X-CineMatch: 1`.
+  Activa la cuenta con 200; token inválido, caducado o usado devuelve 400.
+  No inicia sesión automáticamente ni cambia el rol.
+- `POST /api/confirmacion/reenviar`: JSON `{email}`, misma cabecera.
+  Devuelve el mismo mensaje 200 para cuentas desconocidas, activas, eliminadas,
+  limitadas y pendientes. Un correo con formato inválido devuelve 400.
+- Otros métodos devuelven 405; falta de cabecera de protección, 403.
+- Un token dura 24 horas, se almacena como SHA-256 y se consume junto con la
+  activación dentro de una transacción. Las cuentas eliminadas no se reactivan.
+- Cada nuevo envío invalida el enlace anterior. Espera mínima de 60 segundos,
+  máximo cinco intentos por cuenta/hora y 100 globales/hora, compartidos en
+  PostgreSQL. Un fallo SMTP también cuenta para estos límites.
+- El reenvío sirve también para cuentas pendientes de hitos anteriores.
+- Google sigue creando cuentas confirmadas; no se vinculan cuentas automáticamente.
+- Logs: `confirmacion_enviada`, `cuenta_confirmada`, `error_correo`.
+  No incluyen el enlace, token, contraseña SMTP, dirección del destinatario ni
+  errores crudos del proveedor. `EAUTH` orienta a credenciales Gmail; `ETIMEDOUT`
+  a conectividad. No habilitar debug SMTP en producción.
+
+### Configuración Gmail
+
+Activar verificación en dos pasos y crear una contraseña de aplicación.
+Usar la dirección de esa misma cuenta en `SMTP_USER` y la contraseña de
+aplicación en `SMTP_PASSWORD`. No es el secreto del cliente OAuth.
+El adaptador utiliza `smtp.gmail.com:465` con TLS y tiempos de espera acotados.
+Los mensajes salen desde esa dirección Gmail, con el nombre CineMatch.
+
+Esta configuración es adecuada para la demostración de bajo volumen.
+Gmail aplica sus propios límites y controles de acceso; el envío real debe
+comprobarse también desde Cloud Run. Para un servicio de mayor volumen,
+conviene migrar el adaptador a un proveedor de correo transaccional.
+
+### Despliegue de esta rama
+
+Antes de fusionar, con las migraciones anteriores ya aplicadas:
+
+1. Ejecutar `sql/004-confirmacion-correo.sql` en Cloud SQL, base `cinematch`,
+   como propietario. No elimina usuarios ni cambia roles.
+2. Conceder al usuario de ejecución:
+
+```sql
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON TABLE confirmaciones_correo, limite_correo
+TO cinematch_app;
+```
+
+3. En Secret Manager, crear `cinematch-smtp-password` con la contraseña de
+   aplicación y dar Secret Accessor a la cuenta de servicio de Cloud Run.
+4. En Cloud Run configurar `SMTP_USER` con la cuenta remitente,
+   `SMTP_PASSWORD` como referencia a una versión concreta del secreto y
+   `APP_URL=https://cinematch-437102806627.europe-west1.run.app`.
+   Conservar el resto de variables, conexión SQL y secretos OAuth.
+5. Desplegar esa configuración. El código anterior ignora las nuevas variables.
+6. Tras las pruebas locales y el CI verde, fusionar la PR y esperar al despliegue
+   automático. El nuevo código exige esas variables y la tabla nueva al arrancar.
+7. Registrar una cuenta nueva desde la URL pública, abrir el correo, confirmar,
+   iniciar sesión, recargar y cerrar sesión.
+
+### Pruebas y límites de la validación
+
+`npm test` incluye pruebas aisladas sin enviar correos reales: bloqueo antes de
+confirmar y acceso después, caducidad, manipulación, eliminación, uso único,
+reenvío, límites, fallos SMTP, protección HTTP y exclusión de secretos.
+`npm run test:postgres` añade pruebas con dos conexiones para comprobar reserva
+y consumo únicos, reenvío, caducidad y eliminación. Usar una base de pruebas
+local o CI, nunca producción. Las pruebas no requieren credenciales SMTP.
+La validación de entrega real requiere el Gmail configurado por el usuario.
+
+Fuentes:
+- https://support.google.com/accounts/answer/185833
+- https://nodemailer.com/guides/using-gmail
+- https://nodemailer.com/smtp

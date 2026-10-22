@@ -87,6 +87,13 @@
       Reintentar conexión
     </button>
 
+    <section id="panel-confirmacion" hidden aria-labelledby="titulo-confirmacion">
+      <h2 id="titulo-confirmacion">Confirmar cuenta</h2>
+      <p>Pulsa el botón para confirmar la cuenta asociada al enlace que recibiste por correo.</p>
+      <button id="confirmar-correo" type="button">Confirmar cuenta</button>
+      <p id="resultado-confirmacion" role="status" aria-live="polite"></p>
+    </section>
+
     <div id="acceso" hidden>
       <section aria-labelledby="titulo-registro">
         <h2 id="titulo-registro">Crear cuenta</h2>
@@ -151,6 +158,15 @@
           >
 
           <button type="submit">Entrar</button>
+        </form>
+      </section>
+      <section aria-labelledby="titulo-reenvio">
+        <h2 id="titulo-reenvio">¿No has recibido la confirmación?</h2>
+        <p>Revisa spam o solicita un nuevo enlace. Utiliza el correo más reciente.</p>
+        <form id="form-reenvio">
+          <label for="reenvio-email">Correo electrónico</label>
+          <input id="reenvio-email" name="email" type="email" autocomplete="email" required>
+          <button type="submit">Reenviar confirmación</button>
         </form>
       </section>
     </div>

@@ -1,3 +1,4 @@
+import { ErrorConfirmacion } from "./confirmaciones.js";
 import { ErrorOAuth, crearValorOAuth } from "./google-oauth.js";
 import { IntentosOAuth } from "./intentos-oauth.js";
 import { randomUUID } from "node:crypto";
@@ -178,6 +179,7 @@ export function crearAplicacion({
   cookieSegura = process.env.NODE_ENV === "production",
   datos = new DatosUsuarios(),
   google = null,
+  confirmaciones = null,
   intentosOAuth = new IntentosOAuth(),
   sesiones = new Sesiones({ duracionMs: DURACION_SESION_SEGUNDOS * 1000 }),
   registrarActividad = crearRegistroActividad()
@@ -324,6 +326,22 @@ async function exigirUsuario(peticion) {
         });
       }
       
+      if (ruta === "/api/confirmacion" || ruta === "/api/confirmacion/reenviar") {
+        if (metodo !== "POST") return metodoNoPermitido(respuesta, "POST");
+        comprobarCabeceraCliente(peticion);
+        if (!confirmaciones) throw new ErrorHTTP(503, "La confirmación por correo no está disponible temporalmente.");
+        const cuerpo = await leerJSON(peticion);
+        if (ruta === "/api/confirmacion") {
+          await confirmaciones.confirmar(cuerpo.token);
+          evento = "cuenta_confirmada";
+          return responderJSON(respuesta, 200, { mensaje: "Cuenta confirmada. Ya puedes iniciar sesión." });
+        }
+        await confirmaciones.solicitar(cuerpo.email);
+        return responderJSON(respuesta, 200, {
+          mensaje: "Si la cuenta está pendiente y no has superado el límite de envíos, recibirás un correo. Revisa también spam. Espera al menos 60 segundos antes de solicitar otro."
+        });
+      }
+
       if (url.pathname === "/api/registro") {
           if (peticion.method !== "POST") {
             return metodoNoPermitido(respuesta, "POST");
@@ -339,7 +357,13 @@ async function exigirUsuario(peticion) {
 
           evento = "usuario_registrado";
           actividad.objetivoId = usuario.id;
-          return responderJSON(respuesta, 201, { usuario });
+          let correoEnviado = false;
+          try {
+            correoEnviado = confirmaciones ? await confirmaciones.solicitar(usuario.email) : false;
+          } catch {
+            registrarActividad("error_correo", { codigo: "CORREO_NO_ENVIADO" });
+          }
+          return responderJSON(respuesta, 201, { usuario, correoEnviado });
         }
 
 
@@ -528,6 +552,9 @@ async function exigirUsuario(peticion) {
       actividad.codigo = error?.codigo ?? error?.code;
       if (respuesta.destroyed || respuesta.writableEnded) return;
 
+      if (error instanceof ErrorConfirmacion) {
+        return responderJSON(respuesta, error.estado, { error: error.message, codigo: error.codigo });
+      }
       if (error instanceof ErrorHTTP) {
         if (error.estado === 413) {
           respuesta.setHeader("Connection", "close");

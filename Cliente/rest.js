@@ -85,7 +85,7 @@ export async function registrarUsuario({ nombre, email, password }) {
     datos: { nombre, email, password }
   });
 
-  return resultado.usuario;
+  return resultado;
 }
 
 export async function iniciarSesion({ email, password }) {
@@ -137,4 +137,11 @@ export function eliminarUsuario(id) {
 // El servidor prepara el intento y la cookie; el navegador visita Google.
 export async function prepararAccesoGoogle() {
   return (await realizarPeticion("/api/auth/google", { metodo: "POST" })).url;
+}
+
+export function confirmarCorreo(token) {
+  return realizarPeticion("/api/confirmacion", { metodo: "POST", datos: { token } });
+}
+export function reenviarConfirmacion(email) {
+  return realizarPeticion("/api/confirmacion/reenviar", { metodo: "POST", datos: { email } });
 }

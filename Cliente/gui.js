@@ -1,4 +1,6 @@
 import {
+  confirmarCorreo,
+  reenviarConfirmacion,
   prepararAccesoGoogle,
   obtenerEstadoServidor,
   registrarUsuario,
@@ -12,6 +14,13 @@ import {
 
 
 
+// El fragmento no llega al servidor ni a los registros HTTP. Se retira del historial.
+const enlaceInicial = new URL(window.location.href);
+const fragmento = new URLSearchParams(enlaceInicial.hash.slice(1));
+let tokenConfirmacion = fragmento.get("confirmar");
+if (tokenConfirmacion !== null) {
+  window.history.replaceState(null, "", enlaceInicial.pathname + enlaceInicial.search);
+}
 const estado = document.getElementById("estado");
 const estadoSesion = document.getElementById("estado-sesion");
 const mensaje = document.getElementById("mensaje");
@@ -115,15 +124,17 @@ formRegistro.addEventListener("submit", async evento => {
   mostrarMensaje("Creando cuenta...");
 
   try {
-    const usuario = await registrarUsuario(datos);
+    const { usuario, correoEnviado } = await registrarUsuario(datos);
 
     formRegistro.reset();
     document.getElementById("login-email").value = usuario.email;
+    document.getElementById("reenvio-email").value = usuario.email;
 
     mostrarMensaje(
-      "Cuenta creada y pendiente de confirmación. " +
-      "Todavía no puedes iniciar sesión. " +
-      "El envío del correo de confirmación aún no está disponible."
+      correoEnviado
+        ? "Cuenta creada. Revisa tu correo y spam para confirmarla. El enlace caduca en 24 horas."
+        : "Cuenta creada, pero no hemos podido enviar la confirmación. Solicita otro correo dentro de 60 segundos.",
+      !correoEnviado
     );
   } catch (error) {
     mostrarMensaje(error.message, true);
@@ -328,6 +339,14 @@ async function iniciarInterfaz() {
   }
   comprobarServidor();
   await recuperarSesion();
+  if (tokenConfirmacion !== null) {
+    document.getElementById("panel-confirmacion").hidden = false;
+    if (!/^[a-f0-9]{64}$/.test(tokenConfirmacion)) {
+      document.getElementById("resultado-confirmacion").textContent = "El enlace no es válido. Solicita otro correo.";
+      tokenConfirmacion = null;
+      document.getElementById("confirmar-correo").hidden = true;
+    }
+  }
   const mensajes = {
     cancelado: "Has cancelado el acceso con Google. Puedes volver a intentarlo.",
     cuenta_existente: "Ya existe una cuenta con ese correo. Entra con tu contraseña; las cuentas no se vinculan automáticamente.",
@@ -336,4 +355,33 @@ async function iniciarInterfaz() {
   if (resultado === "correcto" && usuarioActual) mostrarMensaje("Sesión iniciada con Google.");
   else if (resultado && Object.hasOwn(mensajes, resultado)) mostrarMensaje(mensajes[resultado], true);
 }
+document.getElementById("form-reenvio").addEventListener("submit", async evento => {
+  evento.preventDefault();
+  if (ocupado) return;
+  cambiarOcupado(true);
+  mostrarMensaje("Solicitando confirmación...");
+  try {
+    const resultado = await reenviarConfirmacion(document.getElementById("reenvio-email").value);
+    mostrarMensaje(resultado.mensaje);
+  } catch (error) { mostrarMensaje(error.message, true); }
+  finally { cambiarOcupado(false); }
+});
+document.getElementById("confirmar-correo").addEventListener("click", async () => {
+  if (ocupado || !tokenConfirmacion) return;
+  cambiarOcupado(true);
+  const resultado = document.getElementById("resultado-confirmacion");
+  resultado.textContent = "Confirmando cuenta...";
+  try {
+    const respuesta = await confirmarCorreo(tokenConfirmacion);
+    resultado.textContent = respuesta.mensaje;
+    tokenConfirmacion = null;
+    document.getElementById("confirmar-correo").hidden = true;
+  } catch (error) {
+    resultado.textContent = error.message;
+    if (error.codigo === "CONFIRMACION_INVALIDA") {
+      tokenConfirmacion = null;
+      document.getElementById("confirmar-correo").hidden = true;
+    }
+  } finally { cambiarOcupado(false); }
+});
 iniciarInterfaz();

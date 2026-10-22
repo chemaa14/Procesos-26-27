@@ -1,3 +1,6 @@
+import { crearCorreo } from "./correo.js";
+import { Confirmaciones } from "./confirmaciones.js";
+import { ConfirmacionesPostgres } from "./confirmaciones-postgres.js";
 import { crearGoogleOAuth } from "./google-oauth.js";
 import { SesionesPostgres } from "./sesiones-postgres.js";
 import { IntentosOAuthPostgres } from "./intentos-oauth.js";
@@ -18,8 +21,13 @@ try {
 
   await pool.query("SELECT token_hash FROM sesiones LIMIT 0");
   await pool.query("SELECT estado_hash FROM intentos_oauth LIMIT 0");
+  await pool.query("SELECT token_hash FROM confirmaciones_correo LIMIT 0");
+  await pool.query("SELECT id FROM limite_correo LIMIT 0");
+  const correo = crearCorreo();
+  const confirmaciones = new Confirmaciones({ repositorio: new ConfirmacionesPostgres(pool),
+    correo, urlPublica: correo.urlPublica, registrarActividad });
   const datos = new DatosUsuariosPostgres(pool);
-  const aplicacion = crearAplicacion({ datos, registrarActividad, google: crearGoogleOAuth(),
+  const aplicacion = crearAplicacion({ datos, confirmaciones, registrarActividad, google: crearGoogleOAuth(),
     sesiones: new SesionesPostgres(pool), intentosOAuth: new IntentosOAuthPostgres(pool) });
   servidor = aplicacion.servidor;
 

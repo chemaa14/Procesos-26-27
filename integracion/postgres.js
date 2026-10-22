@@ -156,3 +156,43 @@ test("PostgreSQL comparte identidad Google, sesiones e intentos de un solo uso",
     } finally { await Promise.all([poolA.end(), poolB.end()]); }
   }
 });
+
+test("PostgreSQL confirma una sola vez y controla reenvíos entre conexiones", async () => {
+  const { ConfirmacionesPostgres } = await import("../Servidor/confirmaciones-postgres.js");
+  const { hashConfirmacion } = await import("../Servidor/confirmaciones.js");
+  const pool = crearPool();
+  const otroPool = crearPool();
+  const datos = new DatosUsuariosPostgres(pool);
+  const repo = new ConfirmacionesPostgres(pool);
+  const otro = new ConfirmacionesPostgres(otroPool);
+  const id = randomUUID();
+  const email = `confirmacion-${id}@example.com`;
+  const h1 = hashConfirmacion(randomUUID()), h2 = hashConfirmacion(randomUUID());
+  try {
+    await datos.guardar({ id, nombre: "Confirmación", email, rol: "usuario", confirmado: false, eliminado: false });
+    const reservas = await Promise.all([repo.reservar(email, h1), otro.reservar(email, h2)]);
+    assert.equal(reservas.filter(Boolean).length, 1);
+    const hashInicial = reservas[0] ? h1 : h2;
+    assert.equal(await otro.reservar(email, hashConfirmacion(randomUUID())), null);
+    await pool.query("UPDATE confirmaciones_correo SET enviado_en = NOW() - INTERVAL '61 seconds' WHERE usuario_id = $1", [id]);
+    const nuevo = hashConfirmacion(randomUUID());
+    assert.ok(await otro.reservar(email, nuevo));
+    assert.equal(await repo.consumir(hashInicial), false);
+    await pool.query("UPDATE confirmaciones_correo SET caduca_en = NOW() - INTERVAL '1 second' WHERE usuario_id = $1", [id]);
+    assert.equal(await repo.consumir(nuevo), false);
+    await pool.query("UPDATE confirmaciones_correo SET caduca_en = NOW() + INTERVAL '1 hour' WHERE usuario_id = $1", [id]);
+    await pool.query("UPDATE usuarios SET eliminado = TRUE WHERE id = $1", [id]);
+    assert.equal(await repo.consumir(nuevo), false);
+    await pool.query("UPDATE usuarios SET eliminado = FALSE WHERE id = $1", [id]);
+    const consumos = await Promise.all([repo.consumir(nuevo), otro.consumir(nuevo)]);
+    assert.equal(consumos.filter(Boolean).length, 1);
+    const usuario = await datos.buscarPorId(id);
+    assert.equal(usuario.confirmado, true);
+    assert.equal(usuario.rol, "usuario");
+    assert.equal(await repo.consumir(nuevo), false);
+    assert.equal(await repo.reservar(email, h1), null);
+  } finally {
+    await pool.query("DELETE FROM usuarios WHERE id = $1", [id]);
+    await pool.end(); await otroPool.end();
+  }
+});
