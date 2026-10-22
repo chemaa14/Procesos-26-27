@@ -125,8 +125,9 @@
             aria-describedby="ayuda-password"
             required
           >
+          <button type="button" data-password="registro-password" aria-controls="registro-password" aria-pressed="false" aria-label="Mostrar contraseña"><span aria-hidden="true">👁</span> <span data-texto>Mostrar contraseña</span></button>
           <p id="ayuda-password">
-            Entre 15 y 128 caracteres. Puedes utilizar una frase con espacios.
+            Entre 8 y 128 caracteres. Puedes utilizar una frase con espacios.
           </p>
 
           <button type="submit">Crear cuenta</button>
@@ -156,6 +157,7 @@
             autocomplete="current-password"
             required
           >
+          <button type="button" data-password="login-password" aria-controls="login-password" aria-pressed="false" aria-label="Mostrar contraseña"><span aria-hidden="true">👁</span> <span data-texto>Mostrar contraseña</span></button>
 
           <button type="submit">Entrar</button>
         </form>

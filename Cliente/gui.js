@@ -385,3 +385,23 @@ document.getElementById("confirmar-correo").addEventListener("click", async () =
   } finally { cambiarOcupado(false); }
 });
 iniciarInterfaz();
+// El botón funciona con ratón y teclado y nunca envía el formulario.
+for (const boton of document.querySelectorAll("[data-password]")) {
+  const campo = document.getElementById(boton.dataset.password);
+  const actualizar = (visible) => {
+    campo.type = visible ? "text" : "password";
+    boton.setAttribute("aria-pressed", String(visible));
+    const texto = visible ? "Ocultar contraseña" : "Mostrar contraseña";
+    boton.setAttribute("aria-label", texto);
+    boton.querySelector("[data-texto]").textContent = texto;
+  };
+  boton.addEventListener("click", () => actualizar(campo.type === "password"));
+  campo.form.addEventListener("submit", () => actualizar(false));
+}
+
+const passwordRegistro = document.getElementById("registro-password");
+passwordRegistro.addEventListener("input", () => {
+  const longitud = [...passwordRegistro.value].length;
+  passwordRegistro.setCustomValidity(longitud >= 8 && longitud <= 128
+    ? "" : "La contraseña debe tener entre 8 y 128 caracteres.");
+});

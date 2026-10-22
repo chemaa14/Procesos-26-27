@@ -46,7 +46,7 @@ export class ConfirmacionesMemoria {
   async reservar(email, hash) {
     const ahora = this.reloj();
     this.envios = this.envios.filter(t => t > ahora - 3600000);
-    const usuario = [...this.datos.usuarios.values()].find(u => u.email === email);
+    const usuario = [...this.datos.usuarios.values()].find(u => !u.eliminado && u.email === email);
     if (!usuario || usuario.confirmado || usuario.eliminado) return null;
     const previo = this.tokens.get(usuario.id);
     const mismaHora = previo && previo.inicio > ahora - 3600000;

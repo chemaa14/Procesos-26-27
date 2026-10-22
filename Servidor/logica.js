@@ -175,12 +175,12 @@ export class LogicaUsuarios {
   } catch (error) {
     if (
       typeof password !== "string" ||
-      [...password].length < 15 ||
+      [...password].length < 8 ||
       [...password].length > 128
     ) {
       throw new ErrorUsuarios(
         "PASSWORD_INVALIDA",
-        "La contraseña debe tener entre 15 y 128 caracteres."
+        "La contraseña debe tener entre 8 y 128 caracteres."
       );
     }
 

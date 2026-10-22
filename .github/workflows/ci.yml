@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, hito1/ci-cd, hito3/persistencia, hito3/roles-permisos, hito3/logs-actividad, hito4/oauth-google, hito4/confirmacion-correo]
+    branches: [main, hito1/ci-cd, hito3/persistencia, hito3/roles-permisos, hito3/logs-actividad, hito4/oauth-google, hito4/confirmacion-correo, hito4/mejoras-cuentas]
 
 permissions:
   contents: read
@@ -63,6 +63,9 @@ jobs:
           docker exec -i "${{ job.services.postgres.id }}" \
             psql -U cinematch -d cinematch_test -v ON_ERROR_STOP=1 \
             < sql/004-confirmacion-correo.sql
+          docker exec -i "${{ job.services.postgres.id }}" \
+            psql -U cinematch -d cinematch_test -v ON_ERROR_STOP=1 \
+            < sql/005-correos-disponibles.sql
 
       - name: Ejecutar las pruebas existentes
         run: npm test

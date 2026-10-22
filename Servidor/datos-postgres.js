@@ -8,7 +8,7 @@ export class DatosUsuariosPostgres {
   }
 
   async buscarPorGoogleSub(sub) {
-    const { rows } = await this.pool.query(`SELECT ${CAMPOS} FROM usuarios WHERE google_sub = $1`, [sub]);
+    const { rows } = await this.pool.query(`SELECT ${CAMPOS} FROM usuarios WHERE google_sub = $1 AND eliminado = FALSE`, [sub]);
     return rows[0] ?? null;
   }
 
@@ -81,7 +81,7 @@ export class DatosUsuariosPostgres {
 
   async buscarPorEmail(email) {
     const resultado = await this.pool.query(
-      `SELECT ${CAMPOS} FROM usuarios WHERE email = $1`,
+      `SELECT ${CAMPOS} FROM usuarios WHERE email = $1 AND eliminado = FALSE`,
       [email]
     );
 

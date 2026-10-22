@@ -68,6 +68,7 @@ Get-Content -Raw -Encoding UTF8 .\sql\001-usuarios.sql | docker compose exec -T 
 Get-Content -Raw -Encoding UTF8 .\sql\002-roles.sql | docker compose exec -T db psql -U cinematch -d cinematch -v ON_ERROR_STOP=1
 Get-Content -Raw -Encoding UTF8 .\sql\003-oauth-google.sql | docker compose exec -T db psql -U cinematch -d cinematch -v ON_ERROR_STOP=1
 Get-Content -Raw -Encoding UTF8 .\sql\004-confirmacion-correo.sql | docker compose exec -T db psql -U cinematch -d cinematch -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 .\sql\005-correos-disponibles.sql | docker compose exec -T db psql -U cinematch -d cinematch -v ON_ERROR_STOP=1
 npm run start:postgres
 ```
 
@@ -139,7 +140,7 @@ npm test
 npm run test:postgres
 ```
 
-La segunda orden requiere PostgreSQL con las cuatro migraciones (001, 002, 003 y 004) aplicadas. Comprueba
+La segunda orden requiere PostgreSQL con las cinco migraciones (001 a 005) aplicadas. Comprueba
 persistencia de usuario, hash y rol entre conexiones, restricciones de rol y
 borrado lógico. GitHub Actions prepara PostgreSQL y ejecuta ambos comandos.
 
@@ -239,7 +240,7 @@ npm run start:postgres
 `npm test` incluye pruebas del formato, accesos, bajas, códigos HTTP,
 identificadores, fallos de base de datos y arranque, y exclusión de secretos
 (incluso en rutas desconocidas o parámetros de consulta). La prueba PostgreSQL
-requiere el Docker local y las migraciones 001, 002, 003 y 004.
+requiere el Docker local y las migraciones 001 a 005.
 
 Desde el navegador, iniciar sesión con una cuenta local confirmada, cerrar la
 sesión y realizar un intento con contraseña incorrecta. En la terminal deben
@@ -309,7 +310,7 @@ parcial produce `CONFIGURACION_INVALIDA` al arrancar. En local abrir exactamente
    token. El adaptador comprueba también `nonce` y `email_verified`.
 5. `LogicaUsuarios.autenticarGoogle()` busca por `sub`, la identidad estable de
    Google. Si es nueva, crea la cuenta confirmada con rol `usuario` y sin hash
-   de contraseña. Rechaza las cuentas eliminadas. Nunca toma el rol del cliente.
+   de contraseña. Tras una baja crea una cuenta nueva, sin reactivar la anterior. Nunca toma el rol del cliente.
 6. El servidor crea su propia sesión de 8 horas y redirige a `/`. La interfaz
    recupera `/api/sesion`. Los tokens de Google no se entregan al frontend ni
    se guardan en logs, localStorage o la base de datos.
@@ -448,3 +449,19 @@ Fuentes:
 - https://support.google.com/accounts/answer/185833
 - https://nodemailer.com/guides/using-gmail
 - https://nodemailer.com/smtp
+
+
+### Bajas y nuevo registro (migración 005)
+
+Aplicar `sql/005-correos-disponibles.sql` en local y en Cloud SQL antes de
+publicar esta versión. La migración también libera los correos de bajas anteriores.
+Se conserva el registro de baja (`eliminado = true`); no es un borrado físico.
+Solo las cuentas vigentes reservan correo e identidad de Google.
+La baja propia y la realizada por un administrador permiten registrarse de nuevo:
+se crea otro identificador, con rol usuario, sin recuperar sesiones ni permisos.
+El registro por contraseña requiere confirmar otra vez el correo. Google crea una
+cuenta nueva tras verificar la identidad. El inicio con la contraseña antigua sigue
+rechazado. Eliminar no equivale a suspender o prohibir futuros registros.
+Las contraseñas admiten de 8 a 128 caracteres; las existentes siguen funcionando.
+Registro e inicio de sesión incluyen un botón accesible para mostrar u ocultar la
+contraseña. Al enviar el formulario vuelve a ocultarse.

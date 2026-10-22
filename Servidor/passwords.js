@@ -17,14 +17,14 @@ const OPCIONES = {
 function esPasswordValida(password) {
   return (
     typeof password === "string" &&
-    [...password].length >= 15 &&
+    [...password].length >= 8 &&
     [...password].length <= 128
   );
 }
 
 export async function generarHash(password) {
   if (!esPasswordValida(password)) {
-    throw new Error("La contraseña debe tener entre 15 y 128 caracteres.");
+    throw new Error("La contraseña debe tener entre 8 y 128 caracteres.");
   }
 
   const sal = randomBytes(16);

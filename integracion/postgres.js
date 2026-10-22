@@ -148,7 +148,14 @@ test("PostgreSQL comparte identidad Google, sesiones e intentos de un solo uso",
     await datosA.guardar({ ...a, rol: "administrador" });
     assert.equal((await logicaB.autenticarGoogle(perfil)).rol, "administrador");
     await logicaA.eliminar(a.id);
-    await assert.rejects(logicaB.autenticarGoogle(perfil), { codigo: "OAUTH_INVALIDO" });
+    const nueva = await logicaB.autenticarGoogle(perfil);
+    assert.notEqual(nueva.id, a.id);
+    assert.equal(nueva.rol, "usuario");
+    assert.equal(nueva.confirmado, true);
+    assert.equal(nueva.eliminado, false);
+    assert.equal((await datosA.buscarPorId(a.id)).eliminado, true);
+    assert.equal((await datosA.buscarPorGoogleSub(perfil.sub)).id, nueva.id);
+    assert.equal((await logicaA.autenticarGoogle(perfil)).id, nueva.id);
   } finally {
     try {
       await poolA.query("DELETE FROM intentos_oauth WHERE estado_hash=$1", [hashToken(estado)]);
@@ -194,5 +201,30 @@ test("PostgreSQL confirma una sola vez y controla reenvíos entre conexiones", a
   } finally {
     await pool.query("DELETE FROM usuarios WHERE id = $1", [id]);
     await pool.end(); await otroPool.end();
+  }
+});
+
+test('PostgreSQL libera correo y Google tras la baja y mantiene unicidad concurrente', async () => {
+  const pool = crearPool(); const datos = new DatosUsuariosPostgres(pool);
+  const ids = Array.from({length:4}, () => randomUUID());
+  const email = `baja-${ids[0]}@example.com`;
+  const sub = `sub-${ids[0]}`;
+  const usuario = id => ({id,nombre:'Prueba baja',email,rol:'usuario',confirmado:true,eliminado:false});
+  try {
+    await datos.crearConGoogle(usuario(ids[0]),sub);
+    await datos.guardar({...usuario(ids[0]),eliminado:true});
+    assert.equal(await datos.buscarPorEmail(email),null);
+    assert.equal(await datos.buscarPorGoogleSub(sub),null);
+    const resultados = await Promise.allSettled(ids.slice(1,3).map(id => datos.crearConGoogle(usuario(id),sub)));
+    assert.equal(resultados.filter(r=>r.status==='fulfilled').length,1);
+    const nueva = resultados.find(r=>r.status==='fulfilled').value;
+    assert.notEqual(nueva.id,ids[0]);
+    await datos.guardar({...nueva,eliminado:true});
+    await datos.crearConHash({...usuario(ids[3]),confirmado:false},'hash-nuevo');
+    assert.equal((await datos.buscarPorEmail(email)).id,ids[3]);
+    assert.equal(await datos.buscarPorGoogleSub(sub),null);
+  } finally {
+    await pool.query('DELETE FROM usuarios WHERE id = ANY($1::text[])',[ids]);
+    await pool.end();
   }
 });
