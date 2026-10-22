@@ -1,5 +1,8 @@
 // Lista cerrada de campos: nunca serializamos peticiones, usuarios ni errores.
 const MENSAJES = Object.freeze({
+  confirmacion_enviada: "Correo de confirmación aceptado por el servidor de correo.",
+  cuenta_confirmada: "Cuenta confirmada por correo.",
+  error_correo: "No se pudo enviar el correo de confirmación.",
   peticion_http: "Petición HTTP completada.",
   peticion_interrumpida: "La conexión se cerró antes de completar la respuesta.",
   usuario_registrado: "Cuenta registrada pendiente de confirmación.",
@@ -25,6 +28,7 @@ const MENSAJES = Object.freeze({
 });
 const RUTAS = new Set([
   "/", "/gui.js", "/rest.js", "/api/health", "/api/registro", "/api/login",
+  "/api/confirmacion", "/api/confirmacion/reenviar",
   "/api/auth/google", "/api/auth/google/callback",
   "/api/logout", "/api/sesion", "/api/perfil", "/api/usuarios",
   "/api/usuarios/:id", "/api/usuarios/:id/activo", "otra"
@@ -40,6 +44,8 @@ const DIAGNOSTICOS_OAUTH = new Set([
 const CODIGOS = new Set([
   "NOMBRE_INVALIDO", "EMAIL_INVALIDO", "PASSWORD_INVALIDA", "EMAIL_DUPLICADO",
   "USUARIO_NO_ENCONTRADO", "USUARIO_ELIMINADO", "CREDENCIALES_INVALIDAS",
+  "CONFIRMACION_INVALIDA", "CONFIGURACION_CORREO_INVALIDA", "CORREO_NO_ENVIADO",
+  "EAUTH", "ECONNECTION", "ESOCKET", "EENVELOPE",
   "OAUTH_INVALIDO", "OAUTH_CUENTA_EXISTENTE",
   "SESION_INVALIDA", "PERMISO_DENEGADO", "CONFIGURACION_INVALIDA",
   "23505", "23514", "28P01", "3D000", "42P01", "42703", "42501",
