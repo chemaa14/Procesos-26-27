@@ -2,6 +2,33 @@
 
 Proyecto de Procesos de la Ingeniería del Software. Sprint 1: arquitectura base.
 
+- Repositorio: https://github.com/chemaa14/Procesos-26-27
+- Aplicación pública: https://cinematch-437102806627.europe-west1.run.app
+
+## Alcance del Sprint 1
+
+Este incremento implementa la base SaaS de CineMatch: gestión de cuentas,
+autenticación, roles, persistencia y despliegue. El catálogo de películas,
+las valoraciones, las recomendaciones y las funciones sociales pertenecen a
+incrementos posteriores.
+
+## Tecnologías y justificación
+
+| Tecnología | Uso y motivo |
+|---|---|
+| Node.js 24 y JavaScript con módulos ES | Permiten usar el mismo lenguaje en cliente y servidor y separar explícitamente las capas. |
+| HTTP de Node.js | Expone la API y sirve el frontend del mismo origen, con control directo de rutas y respuestas. |
+| HTML, CSS y JavaScript del navegador | Interfaz sencilla sin compilación ni framework adicional para el alcance del sprint. |
+| PostgreSQL 17 y `pg` | Persistencia relacional con restricciones, transacciones y consultas SQL parametrizadas. |
+| Docker Compose | Proporciona una base local reproducible, separada de producción. |
+| `node:crypto` y scrypt | Hash de contraseñas con sal aleatoria, sin almacenar contraseñas en texto plano. |
+| Google OAuth/OpenID Connect y `google-auth-library` | Autenticación externa y verificación del token de identidad con la biblioteca del proveedor. |
+| Nodemailer y Gmail SMTP con TLS | Envío autenticado del enlace de confirmación para la demostración académica. |
+| `node:test` y `node:assert/strict` | Pruebas automatizadas con aserciones, integradas en Node.js. |
+| GitHub y GitHub Actions | Historial incremental, revisión mediante PR y ejecución automática de pruebas. |
+| Cloud Build, Cloud Run y Cloud SQL | Construcción y despliegue del backend público y persistencia centralizada. |
+| Secret Manager | Proporciona las credenciales al servicio sin incorporarlas al repositorio. |
+
 ## Estado actual
 
 La aplicación permite registrar cuentas pendientes, iniciar y cerrar sesión,
@@ -46,7 +73,14 @@ Requisitos: Node.js >=24.19.0 de la serie 24 y Docker Compose.
 npm ci
 ```
 
-Crear `.env` en la raíz (no se sube a Git):
+Copiar `.env.example` a `.env` y completar los valores locales. `.env` no se sube a Git.
+Los siguientes valores son ejemplos de desarrollo, nunca credenciales de entrega:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Configuración mínima para ejecutar el servidor:
 
 ```dotenv
 DB_HOST=127.0.0.1
@@ -80,6 +114,20 @@ en `0.0.0.0` salvo que se indique `HOST`.
 La migración 002 añade el rol sin borrar cuentas ni contraseñas y asigna
 `usuario` a las cuentas existentes. No se debe borrar el volumen local.
 
+## Variables de entorno
+
+| Nombres | Necesidad |
+|---|---|
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Obligatorias para PostgreSQL. |
+| `SMTP_USER`, `SMTP_PASSWORD`, `APP_URL` | Obligatorias para el servidor con confirmación de correo. |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Las tres juntas para habilitar Google; vacías para deshabilitarlo en desarrollo. |
+| `NODE_ENV` | Configura el comportamiento de producción, incluidas las cookies seguras. |
+| `HOST`, `PORT` | Opcionales; Cloud Run proporciona `PORT`. |
+
+Los valores reales se mantienen en `.env` local o en la configuración y los secretos
+de Cloud Run. `.env.example` solo contiene nombres y ejemplos sin credenciales.
+El CI usa una base efímera y credenciales ficticias; no requiere secretos de producción.
+
 ## Primer administrador y cuentas de prueba
 
 1. Registrar una cuenta desde la aplicación y confirmarla mediante el correo recibido.
@@ -100,6 +148,15 @@ el registro público siempre crea usuarios normales.
 
 Para una cuenta normal, registrarla y confirmar el enlace recibido por correo.
 
+### Acceso del profesor para la revisión
+
+Abrir la URL pública e iniciar sesión con el correo y la contraseña de la cuenta
+administradora de revisión, entregados por separado junto con la entrega.
+La cuenta debe estar confirmada y promocionada en Cloud SQL mediante la consulta
+anterior. Al entrar se muestra el panel de administración con el listado, rol y
+estado de las cuentas. Una cuenta creada en Docker local no existe automáticamente
+en producción. Las credenciales de revisión no se publican en este README ni en Git.
+
 ## API y permisos
 
 Se conservan los nombres españoles usados por el proyecto: `/api/usuarios`
@@ -109,6 +166,11 @@ equivale a `/users` en las tareas y `/activo` a `/active`.
 |---|---|
 | GET `/api/health` | Público |
 | POST `/api/registro` | Público; crea una cuenta pendiente |
+| POST `/api/confirmacion` | Público; confirma con un token válido de un solo uso |
+| POST `/api/confirmacion/reenviar` | Público; solicita otro enlace con límites de envío |
+| POST `/api/auth/google` | Público; prepara el acceso externo |
+| GET `/api/auth/google/callback` | Retorno de Google; valida el intento y la identidad |
+| POST `/api/prueba/email` | Público; validación del formato de correo, sin crear cuenta |
 | POST `/api/login` | Credenciales de una cuenta confirmada y no eliminada |
 | GET `/api/sesion` | Sesión válida |
 | POST `/api/logout` | Cierra la sesión y borra su cookie |
@@ -167,19 +229,24 @@ El servicio usa PostgreSQL en Cloud SQL. Configuración del entorno:
 - Instancia de Cloud SQL adjunta y cuenta de servicio con Cloud SQL Client y
   acceso al contenido del secreto.
 
-**Antes de fusionar esta rama y desplegar el código nuevo**, ejecutar
-`sql/003-oauth-google.sql` (con 001 y 002 ya aplicadas) en la base `cinematch` de Cloud SQL con el propietario de la
-tabla. El usuario de ejecución de la aplicación no necesita permisos DDL.
-La migración es compatible con el código anterior y puede aplicarse antes.
-Las tablas nuevas necesitan permisos para el usuario de ejecución. Ejecutar
-con el propietario, en la base `cinematch`:
+La base de producción debe tener las cinco migraciones aplicadas, en orden:
+001 usuarios, 002 roles, 003 OAuth y sesiones, 004 confirmación y 005 correos
+reutilizables tras la baja. Las migraciones se aplican con el propietario en la
+base `cinematch`, antes del despliegue que las necesita. El usuario de ejecución
+`cinematch_app` no necesita permisos DDL.
+
+Conceder con el propietario los permisos sobre las tablas y la secuencia identity:
 
 ```sql
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE sesiones, intentos_oauth TO cinematch_app;
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON TABLE usuarios, sesiones, intentos_oauth, confirmaciones_correo, limite_correo
+TO cinematch_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO cinematch_app;
 ```
 
-Las sesiones antiguas en memoria no se migran; habrá que entrar otra vez tras
-este primer despliegue. Los usuarios, sus roles y contraseñas se conservan.
+Configurar también las tres variables Google y las tres variables de correo
+indicadas en sus apartados. Las contraseñas de base de datos, cliente OAuth y SMTP
+se inyectan desde Secret Manager, con acceso para la cuenta de servicio.
 
 El arranque comprueba las tablas de usuarios, sesiones, intentos OAuth, confirmaciones
 y límites de correo, y valida la configuración SMTP antes de escuchar.
@@ -317,7 +384,7 @@ parcial produce `CONFIGURACION_INVALIDA` al arrancar. En local abrir exactamente
 
 **Coincidencia de correos:** si existe una cuenta local con el mismo correo,
 se solicita entrar con la contraseña. No se confirma ni vincula automáticamente.
-La vinculación de cuentas queda fuera de esta rama. Un cambio de correo en Google
+La vinculación de cuentas no forma parte del Sprint 1. Un cambio de correo en Google
 no crea otra cuenta: la identidad se mantiene por `sub`; el correo local no se
 actualiza automáticamente. El registro local sigue pendiente de confirmación por
 correo; ahora puede confirmarse mediante el enlace enviado por Gmail.
@@ -330,7 +397,7 @@ sin reflejar textos externos ni códigos/tokens en la URL final.
 
 ### Cloud Run
 
-Aplicar la migración 003 y los permisos descritos en Despliegue antes del merge.
+Aplicar las migraciones 001 a 005 y los permisos descritos en Despliegue.
 Configurar estas variables en Cloud Run:
 
 - `GOOGLE_CLIENT_ID`: ID del cliente web.
@@ -352,7 +419,7 @@ se utiliza exclusivamente en el servidor.
   borrado, rol y ausencia de secretos en logs. No requiere credenciales de Google.
 - `npm run test:postgres`: incluye el contrato persistente entre dos pools,
   altas concurrentes, identidad Google, revocación/caducidad de sesiones e intento
-  de un solo uso. Requiere las migraciones 003 y 004.
+  de un solo uso. Requiere las migraciones 001 a 005.
 - Manual: entrar con una cuenta de prueba de Google cuyo correo no exista como
   cuenta local; comprobar perfil, recarga, reinicio, cierre y nuevo login. Repetir
   en la URL pública. Cancelar Google y verificar que aparece un mensaje claro.
@@ -409,31 +476,15 @@ Gmail aplica sus propios límites y controles de acceso; el envío real debe
 comprobarse también desde Cloud Run. Para un servicio de mayor volumen,
 conviene migrar el adaptador a un proveedor de correo transaccional.
 
-### Despliegue de esta rama
+### Correo en producción
 
-Antes de fusionar, con las migraciones anteriores ya aplicadas:
-
-1. Ejecutar `sql/004-confirmacion-correo.sql` en Cloud SQL, base `cinematch`,
-   como propietario. No elimina usuarios ni cambia roles.
-2. Conceder al usuario de ejecución:
-
-```sql
-GRANT SELECT, INSERT, UPDATE, DELETE
-ON TABLE confirmaciones_correo, limite_correo
-TO cinematch_app;
-```
-
-3. En Secret Manager, crear `cinematch-smtp-password` con la contraseña de
-   aplicación y dar Secret Accessor a la cuenta de servicio de Cloud Run.
-4. En Cloud Run configurar `SMTP_USER` con la cuenta remitente,
-   `SMTP_PASSWORD` como referencia a una versión concreta del secreto y
-   `APP_URL=https://cinematch-437102806627.europe-west1.run.app`.
-   Conservar el resto de variables, conexión SQL y secretos OAuth.
-5. Desplegar esa configuración. El código anterior ignora las nuevas variables.
-6. Tras las pruebas locales y el CI verde, fusionar la PR y esperar al despliegue
-   automático. El nuevo código exige esas variables y la tabla nueva al arrancar.
-7. Registrar una cuenta nueva desde la URL pública, abrir el correo, confirmar,
-   iniciar sesión, recargar y cerrar sesión.
+Configurar `SMTP_USER` con la cuenta remitente, `SMTP_PASSWORD` con una referencia
+al secreto de la contraseña de aplicación y `APP_URL` con el origen público:
+`https://cinematch-437102806627.europe-west1.run.app`.
+La contraseña SMTP y el secreto del cliente OAuth son credenciales distintas.
+La cuenta de servicio de Cloud Run necesita acceso al secreto SMTP.
+Tras el despliegue, comprobar desde la URL pública el registro, recepción del
+correo, confirmación, login, recarga y logout.
 
 ### Pruebas y límites de la validación
 
@@ -465,3 +516,47 @@ rechazado. Eliminar no equivale a suspender o prohibir futuros registros.
 Las contraseñas admiten de 8 a 128 caracteres; las existentes siguen funcionando.
 Registro e inicio de sesión incluyen un botón accesible para mostrar u ocultar la
 contraseña. Al enviar el formulario vuelve a ocultarse.
+
+
+## GitHub Flow y despliegue continuo
+
+Cada cambio se desarrolla en una rama y se integra en `main` mediante una PR,
+después de ejecutar las pruebas locales y comprobar el CI en verde.
+`.github/workflows/ci.yml` ejecuta las pruebas en cada PR hacia `main` y en cada
+cambio de `main`: instala dependencias, prepara PostgreSQL 17, aplica las cinco
+migraciones y ejecuta `npm test` y `npm run test:postgres`.
+
+El despliegue está conectado a `main` mediante el trigger de Cloud Build del
+proyecto `cinematch-procesos`. Construye la imagen y actualiza el servicio
+`cinematch` de Cloud Run en `europe-west1`. La configuración del trigger reside
+en Google Cloud; el workflow de GitHub Actions contiene la parte de CI.
+Las migraciones y la configuración de nuevos secretos se preparan antes del
+merge; el despliegue del código se dispara automáticamente al integrar cambios.
+
+## Errores y diagnóstico
+
+| Situación | Comportamiento y comprobación |
+|---|---|
+| Credenciales incorrectas o cuenta pendiente | El login se rechaza con un mensaje genérico. Confirmar el correo antes de entrar. |
+| Sin sesión / sin permisos | Respuestas 401 / 403. Un 401 inicial de `/api/sesion` es normal si aún no se ha iniciado sesión. |
+| Correo de cuenta vigente repetido | Registro rechazado con 409. La baja permite un registro nuevo con otro identificador. |
+| Enlace inválido, caducado o utilizado | Confirmación rechazada con 400; solicitar un enlace nuevo y usar el más reciente. |
+| Fallo al enviar el correo | La cuenta se conserva pendiente y la interfaz informa del fallo; se permite reenvío con límites. |
+| Fallo de Google | La interfaz muestra un mensaje conocido. El log `oauth_rechazado` incluye un diagnóstico permitido, por ejemplo `google_invalid_client`. |
+| Fallo de red o respuesta no JSON | El cliente de comunicación muestra un mensaje de conexión o respuesta inesperada. |
+| Fallo interno | Respuesta genérica sin detalles internos; consultar el identificador de solicitud en los logs. |
+| Error al arrancar | Revisar nombres de variables, conexión PostgreSQL, migraciones y configuración SMTP/OAuth. |
+
+## Comprobación final de la entrega
+
+1. Ejecutar `npm test` y `npm run test:postgres` sobre una base local de pruebas.
+2. Comprobar el CI de la PR, integrar y verificar el despliegue automático del mismo commit.
+3. En la URL pública, verificar registro pendiente, confirmación, login local,
+   persistencia de sesión al recargar, logout y acceso con Google.
+4. Probar los permisos con un usuario y un administrador, y las dos formas de baja.
+5. Comprobar que un nuevo registro tras una baja no hereda permisos ni sesiones.
+6. Entregar URL del repositorio, URL pública y credenciales administrativas por
+   un canal separado. Mantener la aplicación disponible durante la evaluación.
+
+Las comprobaciones manuales complementan las pruebas automatizadas; no las sustituyen.
+Las capturas de CI/CD y las métricas reales del sprint se documentan en la memoria.
