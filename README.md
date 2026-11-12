@@ -804,3 +804,7 @@ merge; el despliegue del código se dispara automáticamente al integrar cambios
 
 Las comprobaciones manuales complementan las pruebas automatizadas; no las sustituyen.
 Las capturas de CI/CD y las métricas reales del sprint se documentan en la memoria.
+
+## Sprint 2: pruebas del catálogo (S2-01-T06)
+
+La [guía de pruebas del catálogo](docs/sprint2/S2-01-T06-pruebas-catalogo.md) recoge la cobertura automatizada, los resultados locales y los pasos para repetir la comprobación manual y verificar el despliegue.
