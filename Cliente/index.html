@@ -69,6 +69,176 @@
       color: #a01515;
     }
 
+    .campos-busqueda {
+      display: grid;
+      gap: 0 16px;
+    }
+
+    .campos-busqueda > div {
+      min-width: 0;
+    }
+
+    .ayuda-busqueda {
+      margin: 8px 0 0;
+      color: #555;
+      font-size: 0.9rem;
+    }
+
+    .tarjetas-peliculas {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 16px;
+      margin: 16px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .tarjeta-pelicula {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      box-sizing: border-box;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 10px;
+      color: inherit;
+      text-align: left;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+    }
+
+    .tarjeta-pelicula:hover {
+      border-color: #7340a3;
+    }
+
+    .tarjeta-datos {
+      display: block;
+    }
+
+    .tarjeta-titulo {
+      display: block;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .tarjeta-anio {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 2px 8px;
+      color: white;
+      background: #0d253f;
+      border-radius: 999px;
+      font-size: 0.85rem;
+    }
+
+    .cartel-marco {
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      aspect-ratio: 2 / 3;
+      padding: 8px;
+      overflow: hidden;
+      color: #555;
+      text-align: center;
+      background: #ececec;
+      border-radius: 6px;
+    }
+
+    .cartel-imagen {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .cartel-no-disponible {
+      font-size: 0.9rem;
+    }
+
+    #paginacion {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    #paginacion button {
+      margin-top: 0;
+    }
+
+    #pagina-actual {
+      font-weight: 600;
+    }
+
+    .detalle-pelicula {
+      margin-top: 20px;
+      padding-top: 8px;
+      border-top: 1px solid #ddd;
+    }
+
+    .detalle-contenido {
+      display: grid;
+      gap: 20px;
+      margin-top: 16px;
+    }
+
+    .detalle-cartel {
+      width: 100%;
+      max-width: 240px;
+    }
+
+    .detalle-datos h3 {
+      margin-top: 0;
+    }
+
+    .detalle-sinopsis {
+      line-height: 1.6;
+      white-space: pre-line;
+    }
+
+    .atribucion-tmdb {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid #ddd;
+      color: #555;
+      font-size: 0.85rem;
+    }
+
+    .atribucion-tmdb p {
+      margin: 0;
+    }
+
+    .atribucion-tmdb img {
+      width: 40px;
+      height: auto;
+    }
+
+    @media (min-width: 640px) {
+      .campos-busqueda {
+        grid-template-columns: minmax(0, 2fr) minmax(9rem, 1fr) auto;
+        align-items: end;
+      }
+
+      .campos-busqueda button {
+        margin-top: 0;
+      }
+
+      .detalle-contenido {
+        grid-template-columns: minmax(160px, 240px) minmax(0, 1fr);
+        align-items: start;
+      }
+    }
+
     [hidden] {
       display: none !important;
     }
@@ -179,6 +349,123 @@
       <p id="rol-usuario"></p>
       <button id="cerrar-sesion" type="button">Cerrar sesión</button>
       <button id="eliminar-cuenta" type="button"> Eliminar mi cuenta</button>
+    </section>
+
+    <section id="panel-catalogo" aria-labelledby="titulo-catalogo" hidden>
+      <h2 id="titulo-catalogo">Buscar películas</h2>
+
+      <form id="form-busqueda" novalidate>
+        <div class="campos-busqueda">
+          <div>
+            <label for="busqueda-titulo">Título</label>
+            <input
+              id="busqueda-titulo"
+              name="titulo"
+              type="search"
+              maxlength="200"
+              autocomplete="off"
+              aria-describedby="ayuda-busqueda"
+              required
+            >
+          </div>
+
+          <div>
+            <label for="busqueda-anio">Año (opcional)</label>
+            <input
+              id="busqueda-anio"
+              name="anio"
+              inputmode="numeric"
+              pattern="[0-9]{4}"
+              maxlength="4"
+              autocomplete="off"
+              aria-describedby="ayuda-busqueda"
+            >
+          </div>
+
+          <div>
+            <button id="boton-buscar" type="submit">Buscar</button>
+          </div>
+        </div>
+
+        <p id="ayuda-busqueda" class="ayuda-busqueda">
+          Escribe un título. El año es opcional y debe tener cuatro dígitos.
+        </p>
+      </form>
+
+      <p id="estado-catalogo" role="status" aria-live="polite" tabindex="-1"></p>
+      <p id="error-catalogo" class="error" role="alert" tabindex="-1" hidden></p>
+      <button id="reintentar-catalogo" type="button" hidden>
+        Reintentar búsqueda
+      </button>
+
+      <div id="resultados" hidden>
+        <p id="resumen-resultados" tabindex="-1"></p>
+        <ul
+          id="lista-peliculas"
+          class="tarjetas-peliculas"
+          aria-label="Películas encontradas"
+        ></ul>
+
+        <nav id="paginacion" aria-label="Paginación de resultados" hidden>
+          <button id="pagina-anterior" type="button">Anterior</button>
+          <span id="pagina-actual" aria-live="polite"></span>
+          <button id="pagina-siguiente" type="button">Siguiente</button>
+        </nav>
+      </div>
+
+      <div
+        id="detalle-pelicula"
+        class="detalle-pelicula"
+        role="region"
+        aria-labelledby="detalle-titulo"
+        tabindex="-1"
+        hidden
+      >
+        <button id="volver-resultados" type="button">Volver a resultados</button>
+        <p id="estado-detalle" role="status" aria-live="polite"></p>
+        <p id="error-detalle" class="error" role="alert" tabindex="-1" hidden></p>
+        <button id="reintentar-detalle" type="button" hidden>
+          Reintentar ficha
+        </button>
+
+        <article id="detalle-contenido" class="detalle-contenido" hidden>
+          <div id="detalle-cartel" class="detalle-cartel"></div>
+          <div class="detalle-datos">
+            <h3 id="detalle-titulo" tabindex="-1"></h3>
+            <p id="detalle-anio"></p>
+            <p id="detalle-duracion"></p>
+            <p id="detalle-generos"></p>
+            <p id="detalle-sinopsis" class="detalle-sinopsis"></p>
+          </div>
+        </article>
+      </div>
+
+      <footer class="atribucion-tmdb">
+        <a
+          href="https://www.themoviedb.org/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <img
+            src="https://www.themoviedb.org/assets/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg"
+            alt="TMDB"
+            width="40"
+            height="40"
+            loading="lazy"
+            decoding="async"
+            referrerpolicy="no-referrer"
+          >
+        </a>
+        <p>
+          Datos e imágenes de
+          <a
+            href="https://www.themoviedb.org/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >The Movie Database (TMDB)</a>.
+          <span lang="en">This product uses the TMDB API but is not endorsed or certified by TMDB.</span>
+        </p>
+      </footer>
     </section>
 
     <section id="panel-admin" aria-labelledby="titulo-admin" hidden>

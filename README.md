@@ -4,6 +4,7 @@ Proyecto de Procesos de la Ingeniería del Software. Sprint 1: arquitectura base
 
 - Repositorio: https://github.com/chemaa14/Procesos-26-27
 - Aplicación pública: https://cinematch-437102806627.europe-west1.run.app
+- Documentación de sprint: [S2-01-T01 — Evaluación de fuente de datos](docs/sprint2/S2-01-T01-fuente-datos.md)
 
 ## Alcance del Sprint 1
 
@@ -49,6 +50,7 @@ Los logs de actividad se emiten como JSON por la salida estándar.
 - `Cliente/index.html`: formularios, perfil y tabla de administración.
 - `Cliente/gui.js`: interacción y presentación; muestra datos con `textContent`.
 - `Cliente/rest.js`: peticiones HTTP del mismo origen, con cookie de sesión.
+- `Cliente/catalogo.js`: validación, datos ausentes, URLs de cartel y estado del buscador.
 - `Servidor/api.js`: rutas, validación HTTP y autorización.
 - `Servidor/logica.js`: reglas de negocio y eliminación con permisos.
 - `Servidor/datos.js`: repositorio en memoria para pruebas.
@@ -121,12 +123,252 @@ La migración 002 añade el rol sin borrar cuentas ni contraseñas y asigna
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Obligatorias para PostgreSQL. |
 | `SMTP_USER`, `SMTP_PASSWORD`, `APP_URL` | Obligatorias para el servidor con confirmación de correo. |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Las tres juntas para habilitar Google; vacías para deshabilitarlo en desarrollo. |
+| `TMDB_READ_ACCESS_TOKEN`, `TMDB_TIMEOUT_MS` | Sprint 2: token de lectura y timeout del adaptador de catálogo. No son obligatorias para arrancar. |
 | `NODE_ENV` | Configura el comportamiento de producción, incluidas las cookies seguras. |
 | `HOST`, `PORT` | Opcionales; Cloud Run proporciona `PORT`. |
 
 Los valores reales se mantienen en `.env` local o en la configuración y los secretos
 de Cloud Run. `.env.example` solo contiene nombres y ejemplos sin credenciales.
 El CI usa una base efímera y credenciales ficticias; no requiere secretos de producción.
+
+## Sprint 2: adaptador de catálogo TMDB (S2-01-T02)
+
+`Servidor/catalogo-tmdb.js` centraliza el transporte HTTP interno con TMDB. Usa
+`fetch` nativo de Node.js 24, sin dependencias nuevas. Crear el adaptador exige
+`TMDB_READ_ACCESS_TOKEN`, pero la aplicación puede arrancar sin esa variable:
+T03 solo lo conecta cuando el token no está vacío.
+
+```js
+import { crearCatalogoTMDB } from "./Servidor/catalogo-tmdb.js";
+
+const catalogo = crearCatalogoTMDB(process.env, fetch);
+const datos = await catalogo.consultar("/movie/550", { language: "es-ES" });
+```
+
+- El token se envía únicamente como `Authorization: Bearer` y nunca forma parte
+  de la URL, del JSON devuelto ni de los mensajes de error.
+- El origen es fijo, `https://api.themoviedb.org/3`. Se rechazan rutas absolutas,
+  parámetros ambiguos y rutas que escapan de `/3`; las redirecciones se rechazan.
+- `TMDB_TIMEOUT_MS` es un entero entre 1 y 120000; por defecto 10000. El límite
+  cubre tanto la petición como la lectura completa del cuerpo.
+- Los errores conocidos son `CONFIGURACION_TMDB_INVALIDA`, `ENTRADA_INVALIDA`,
+  `TMDB_AUTENTICACION` (401/403), `TMDB_NO_ENCONTRADO` (404), `TMDB_LIMITE`
+  (429), `TMDB_HTTP` (otros estados), `TMDB_RED`, `TMDB_TIMEOUT` y
+  `TMDB_RESPUESTA_INVALIDA`. No incluyen el token, la URL sensible ni el
+  mensaje original del proveedor. Un error de entrada no se presenta como fallo
+  de TMDB.
+- T03 añade la búsqueda por título y año con respuesta normalizada. T04 añade el
+  detalle por identificador sobre el mismo adaptador. Quedan fuera los reintentos
+  automáticos, la caché y la persistencia.
+
+Configurar `TMDB_READ_ACCESS_TOKEN` con el API Read Access Token de TMDB y,
+opcionalmente, `TMDB_TIMEOUT_MS`. Las pruebas usan `fetch` simulado y un servidor
+local; no realizan consultas reales ni necesitan secretos:
+
+```powershell
+node --test test/catalogo-tmdb.test.js
+```
+
+Fuentes oficiales:
+- <https://developer.themoviedb.org/docs/authentication-application>
+- <https://developer.themoviedb.org/docs/rate-limiting>
+
+## Sprint 2: búsqueda de películas (S2-01-T03)
+
+`GET /api/peliculas?titulo=...&anio=...&pagina=...` busca en TMDB y devuelve un
+contrato propio normalizado. Requiere una sesión válida de una cuenta confirmada
+y no eliminada; el identificador de usuario se obtiene de la sesión.
+
+Parámetros y límites:
+
+- `titulo`: obligatorio. Se aplica `trim`, no puede quedar vacío, admite hasta
+  200 caracteres y rechaza caracteres de control.
+- `anio`: opcional. Debe tener cuatro dígitos y estar entre 1000 y 9999.
+- `pagina`: opcional, entero decimal entre 1 y 500; por defecto 1.
+- Se rechazan parámetros repetidos o desconocidos. El servidor no reenvía al
+  proveedor parámetros arbitrarios.
+
+La consulta interna es `GET /search/movie` con `query`, `language=es-ES`,
+`include_adult=false`, `page` y, si se indica, `primary_release_year`. No se filtra por país de
+producción ni se restringe el catálogo al cine español. La respuesta propia es:
+
+```json
+{
+  "pagina": 1,
+  "totalPaginas": 2,
+  "totalResultados": 21,
+  "peliculas": [
+    {
+      "id": 438631,
+      "titulo": "Dune",
+      "anio": 2021,
+      "cartel": "https://image.tmdb.org/t/p/w500/ejemplo.jpg"
+    }
+  ]
+}
+```
+
+- `id` es el identificador numérico positivo de TMDB.
+- `titulo` usa `title` y recurre a `original_title` si el primero no es útil.
+- `anio` procede de una `release_date` válida; si no existe, es `null`.
+- `cartel` solo se construye con un `poster_path` relativo seguro; en otro caso,
+  o si falta, es `null`.
+- Una búsqueda sin resultados devuelve `200` con la lista vacía. No se devuelve
+  JSON bruto del proveedor ni se inventan identificadores o campos.
+
+Estados controlados, sin mensajes del proveedor ni tokens:
+
+| Estado | Caso |
+|---|---|
+| `400` | Entrada ausente, inválida, repetida o desconocida. |
+| `401` | Sin sesión válida, cuenta pendiente o eliminada. |
+| `503` | Catálogo no configurado o límite temporal del proveedor. |
+| `504` | Tiempo de espera agotado al consultar el catálogo. |
+| `502` | Error upstream o respuesta de proveedor incoherente. |
+| `500` | Error interno desconocido, con mensaje genérico. |
+
+Configurar `TMDB_READ_ACCESS_TOKEN` y, opcionalmente, `TMDB_TIMEOUT_MS` en el
+`.env` local ya existente. El arranque crea el adaptador y el servicio solo si el
+token no está vacío; no se realizan llamadas externas al arrancar. Sin token, las
+cuentas siguen funcionando y la búsqueda responde `503`.
+
+En Google Cloud, para habilitar el catálogo hay que crear un secreto con el token
+de lectura de TMDB y exponerlo como `TMDB_READ_ACCESS_TOKEN` en Cloud Run, con
+acceso para la cuenta de servicio. Si la variable no se define, las cuentas siguen
+funcionando y la búsqueda responde `503`. Esto es distinto de una configuración
+rota: si la variable referencia un secreto inexistente o la cuenta de servicio no
+tiene permiso para leerlo, Cloud Run no arranca; no se trata de un fallo silencioso
+del catálogo.
+
+Pruebas con `fetch` y adaptador simulados, sin credenciales ni llamadas reales:
+
+```powershell
+node --test test/busqueda-peliculas.test.js test/api-peliculas.test.js
+```
+
+Fuentes oficiales:
+- <https://developer.themoviedb.org/reference/search-movie>
+- <https://developer.themoviedb.org/docs/image-basics>
+
+## Sprint 2: detalle de película (S2-01-T04)
+
+`GET /api/peliculas/:id` devuelve la ficha normalizada de una película. Requiere
+una sesión válida de una cuenta confirmada y no eliminada; no exige rol de
+administrador. Usa el mismo adaptador de TMDB que la búsqueda y consulta
+`GET /movie/{id}` con `language=es-ES`.
+
+El identificador debe ser un decimal canónico positivo, sin signo, ceros
+iniciales, decimales, exponentes ni texto, y no puede superar `2147483647`
+(int32 de TMDB). Las rutas codificadas de forma ambigua se rechazan antes de
+llamar al proveedor. La ruta no admite parámetros de consulta y solo acepta
+`GET`; otro método responde `405` con `Allow: GET`.
+
+La respuesta propia es:
+
+```json
+{
+  "id": 550,
+  "titulo": "El club de la lucha",
+  "anio": 1999,
+  "sinopsis": "Un oficinista conoce a un vendedor de jabón.",
+  "generos": [{ "id": 18, "nombre": "Drama" }],
+  "duracion": 139,
+  "cartel": "https://image.tmdb.org/t/p/w500/ejemplo.jpg"
+}
+```
+
+- `id` coincide exactamente con el solicitado.
+- `titulo` usa `title` y recurre a `original_title` si el primero no es útil.
+- `anio` procede de una `release_date` válida; si falta, es `null`.
+- `sinopsis` es el texto de `overview` o `null` si falta o está vacío.
+- `generos` conserva solo entradas válidas `{ id, nombre }`, sin duplicados; si
+  faltan, es `[]`.
+- `duracion` es un entero positivo de minutos o `null` si falta, es cero o no es
+  válida.
+- `cartel` solo se construye con un `poster_path` relativo seguro; en otro caso,
+  o si falta, es `null`.
+- No se devuelve JSON bruto del proveedor ni se inventan campos. Una ficha
+  incoherente, con otro identificador o sin título utilizable se rechaza con un
+  error conocido.
+
+Estados controlados, sin mensajes del proveedor ni tokens:
+
+| Estado | Caso |
+|---|---|
+| `400` | Identificador no canónico, parámetros de consulta o entrada inválida. |
+| `401` | Sin sesión válida, cuenta pendiente o eliminada. |
+| `404` | TMDB no encontró la película en esta ruta de detalle. |
+| `503` | Catálogo no configurado o límite temporal del proveedor. |
+| `504` | Tiempo de espera agotado al consultar el catálogo. |
+| `502` | Error upstream o ficha de proveedor incoherente. |
+| `500` | Error interno desconocido, con mensaje genérico. |
+
+El registro de actividad usa la plantilla `/api/peliculas/:id`, nunca el
+identificador ni la consulta recibidos. Respecto a T03 no se añaden variables de
+entorno, secretos ni migraciones: se reutilizan `TMDB_READ_ACCESS_TOKEN` y,
+opcionalmente, `TMDB_TIMEOUT_MS`. Sin token, el arranque sigue funcionando y las
+cuentas no dependen del catálogo; no se realizan llamadas externas al arrancar.
+
+Pruebas con adaptador y `fetch` simulados, sin credenciales ni llamadas reales:
+
+```powershell
+node --test test/detalle-pelicula.test.js test/api-detalle-pelicula.test.js
+```
+
+Fuente oficial:
+- <https://developer.themoviedb.org/reference/movie-details>
+
+## Sprint 2: buscador y ficha (S2-01-T05)
+
+El panel de catálogo solo se muestra cuando `/api/sesion` confirma una cuenta
+válida, confirmada y no eliminada. No depende de que el catálogo externo esté
+configurado: las cuentas, el perfil, la administración, Google y la confirmación
+por correo siguen funcionando aunque TMDB falle.
+
+Recorrido de la interfaz:
+
+1. **Buscar.** El formulario pide un título obligatorio de hasta 200 caracteres
+   y un año opcional de cuatro dígitos. La búsqueda solo se lanza al enviar el
+   formulario, nunca con cada tecla. Cada búsqueda nueva reinicia la página a 1.
+2. **Resultados.** Cada tarjeta muestra cartel, título y año para distinguir
+   homónimos. Si falta el cartel o la imagen no carga, se conserva el mismo
+   espacio con el texto «Cartel no disponible». Los datos ausentes se marcan
+   como no disponibles; no se inventan.
+3. **Paginación.** Anterior y Siguiente muestran la página actual y respetan
+   `totalPaginas` y el máximo de 500. Estos botones permanecen deshabilitados
+   cuando no hay una página disponible.
+4. **Ficha.** Al elegir una tarjeta se consulta `GET /api/peliculas/:id` y se
+   muestra título, año, sinopsis, géneros, duración y cartel. Volver a
+   resultados conserva el texto, el año y la página, y devuelve el foco a la
+   tarjeta de origen. El detalle también se puede cerrar con Escape.
+5. **Estados.** Hay mensajes distintos para carga, error recuperable con
+   reintento, búsqueda sin resultados y respuesta 401. Un 401 devuelve a la
+   vista de acceso y borra el estado del catálogo.
+
+La comunicación está en `Cliente/rest.js` mediante `buscarPeliculas()` y
+`obtenerDetallePelicula()`. Reutilizan `realizarPeticion()`, `URLSearchParams` y
+`encodeURIComponent`, con cookies del mismo origen, `cache: no-store` y sin
+exponer nunca el token de TMDB en el navegador. No se registran consultas en
+logs. `Cliente/catalogo.js` concentra la validación, el formato de datos
+ausentes, la comprobación de URLs de cartel y el estado de búsqueda y detalle
+que descarta respuestas antiguas.
+
+La vista incluye el aviso obligatorio «This product uses the TMDB API but is not
+endorsed or certified by TMDB.» y un enlace a
+<https://www.themoviedb.org/>. No se muestra disponibilidad de plataformas ni
+JustWatch en esta tarea. No se añaden variables de entorno, secretos ni
+migraciones: se reutilizan `TMDB_READ_ACCESS_TOKEN` y `TMDB_TIMEOUT_MS` del
+servidor.
+
+Pruebas de comunicación y estado de la interfaz, sin credenciales ni llamadas
+reales:
+
+```powershell
+node --test test/cliente-rest.test.js test/catalogo-cliente.test.js
+```
+
+La comprobación visual con cuentas reales corresponde a la validación manual del
+navegador.
 
 ## Primer administrador y cuentas de prueba
 
@@ -176,6 +418,8 @@ equivale a `/users` en las tareas y `/activo` a `/active`.
 | POST `/api/logout` | Cierra la sesión y borra su cookie |
 | GET `/api/perfil` | Datos de la propia cuenta |
 | DELETE `/api/perfil` | Elimina la propia cuenta |
+| GET `/api/peliculas` | Sesión válida; búsqueda paginada en el catálogo |
+| GET `/api/peliculas/:id` | Sesión válida; ficha normalizada de una película |
 | GET `/api/usuarios` | Administrador; listado de cuentas no eliminadas con rol y estado |
 | POST `/api/usuarios` | Administrador; alta sin contraseña, conservada de la API inicial |
 | GET `/api/usuarios/:id/activo` | Administrador; devuelve `{ activo: boolean }` |
@@ -560,3 +804,7 @@ merge; el despliegue del código se dispara automáticamente al integrar cambios
 
 Las comprobaciones manuales complementan las pruebas automatizadas; no las sustituyen.
 Las capturas de CI/CD y las métricas reales del sprint se documentan en la memoria.
+
+## Sprint 2: pruebas del catálogo (S2-01-T06)
+
+La [guía de pruebas del catálogo](docs/sprint2/S2-01-T06-pruebas-catalogo.md) recoge la cobertura automatizada, los resultados locales y los pasos para repetir la comprobación manual y verificar el despliegue.

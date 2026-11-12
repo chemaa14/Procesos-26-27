@@ -9,8 +9,24 @@ import {
   cerrarSesion,
   eliminarMiCuenta,
   listarUsuarios,
-  eliminarUsuario
+  eliminarUsuario,
+  buscarPeliculas,
+  obtenerDetallePelicula
 } from "./rest.js";
+import {
+  TEXTO_ANIO_AUSENTE,
+  TEXTO_CARTEL_AUSENTE,
+  crearEstadoCatalogo,
+  textoAnio,
+  textoDuracion,
+  textoGeneros,
+  textoPaginaActual,
+  textoResumenResultados,
+  textoSinopsis,
+  textoTitulo,
+  urlCartelSegura,
+  validarBusqueda
+} from "./catalogo.js";
 
 
 
@@ -39,8 +55,43 @@ const rolUsuario = document.getElementById("rol-usuario");
 const listaUsuarios = document.getElementById("lista-usuarios");
 const estadoListado = document.getElementById("estado-listado");
 const botonActualizar = document.getElementById("actualizar-usuarios");
+
+const panelCatalogo = document.getElementById("panel-catalogo");
+const formBusqueda = document.getElementById("form-busqueda");
+const busquedaTitulo = document.getElementById("busqueda-titulo");
+const busquedaAnio = document.getElementById("busqueda-anio");
+const botonBuscar = document.getElementById("boton-buscar");
+const estadoCatalogo = document.getElementById("estado-catalogo");
+const errorCatalogo = document.getElementById("error-catalogo");
+const botonReintentarCatalogo = document.getElementById("reintentar-catalogo");
+const resultados = document.getElementById("resultados");
+const listaPeliculas = document.getElementById("lista-peliculas");
+const resumenResultados = document.getElementById("resumen-resultados");
+const paginacion = document.getElementById("paginacion");
+const paginaActual = document.getElementById("pagina-actual");
+const botonAnterior = document.getElementById("pagina-anterior");
+const botonSiguiente = document.getElementById("pagina-siguiente");
+const detallePelicula = document.getElementById("detalle-pelicula");
+const detalleContenido = document.getElementById("detalle-contenido");
+const detalleCartel = document.getElementById("detalle-cartel");
+const detalleTitulo = document.getElementById("detalle-titulo");
+const detalleAnio = document.getElementById("detalle-anio");
+const detalleDuracion = document.getElementById("detalle-duracion");
+const detalleGeneros = document.getElementById("detalle-generos");
+const detalleSinopsis = document.getElementById("detalle-sinopsis");
+const estadoDetalle = document.getElementById("estado-detalle");
+const errorDetalle = document.getElementById("error-detalle");
+const botonReintentarDetalle = document.getElementById("reintentar-detalle");
+const botonVolver = document.getElementById("volver-resultados");
+
+const estadoCatalogoUI = crearEstadoCatalogo();
 let usuarioActual = null;
 let ocupado = false;
+let cargandoBusqueda = false;
+let cargandoDetalle = false;
+let reintentoBusqueda = null;
+let detallePendiente = null;
+let focoDetalle = null;
 
 function mostrarMensaje(texto, esError = false) {
   mensaje.textContent = texto;
@@ -56,11 +107,20 @@ function cambiarOcupado(valor) {
 
   formRegistro.setAttribute("aria-busy", String(valor));
   formLogin.setAttribute("aria-busy", String(valor));
+  actualizarControlesCatalogo();
 }
 
 function mostrarUsuario(usuario) {
+  const cambiaUsuario = (usuario?.id ?? null) !== (usuarioActual?.id ?? null);
+
   usuarioActual = usuario;
+
+  if (cambiaUsuario || !usuario) {
+    limpiarCatalogoUI();
+  }
+
   panelAdmin.hidden = usuario?.rol !== "administrador";
+  panelCatalogo.hidden = !usuario;
   rolUsuario.textContent = usuario ? `Rol: ${usuario.rol}` : "";
   listaUsuarios.replaceChildren();
   estadoListado.textContent = "";
@@ -76,6 +136,8 @@ function mostrarUsuario(usuario) {
   estadoSesion.textContent = usuario
     ? "Sesión iniciada."
     : "No has iniciado sesión.";
+
+  actualizarControlesCatalogo();
 }
 
 async function comprobarServidor() {
@@ -98,6 +160,7 @@ async function recuperarSesion() {
   botonReintentar.hidden = true;
   acceso.hidden = true;
   panelUsuario.hidden = true;
+  panelCatalogo.hidden = true;
   estadoSesion.textContent = "Comprobando sesión...";
 
   try {
@@ -112,6 +175,428 @@ async function recuperarSesion() {
     cambiarOcupado(false);
   }
 }
+
+function actualizarControlesCatalogo() {
+  const habilitado = Boolean(usuarioActual) && !ocupado;
+
+  busquedaTitulo.disabled = !habilitado;
+  busquedaAnio.disabled = !habilitado;
+  botonBuscar.disabled = !habilitado;
+  botonAnterior.disabled = !habilitado || cargandoBusqueda ||
+    !estadoCatalogoUI.puedeAnterior();
+  botonSiguiente.disabled = !habilitado || cargandoBusqueda ||
+    !estadoCatalogoUI.puedeSiguiente();
+  botonVolver.disabled = !habilitado;
+  botonReintentarCatalogo.disabled = !habilitado || cargandoBusqueda;
+  botonReintentarDetalle.disabled = !habilitado || cargandoDetalle;
+
+  formBusqueda.setAttribute("aria-busy", String(cargandoBusqueda));
+  detallePelicula.setAttribute("aria-busy", String(cargandoDetalle));
+
+  if (!estadoCatalogoUI.busqueda) {
+    paginacion.hidden = true;
+  }
+}
+
+function ocultarErrorCatalogo() {
+  errorCatalogo.textContent = "";
+  errorCatalogo.hidden = true;
+  botonReintentarCatalogo.hidden = true;
+}
+
+function mostrarErrorCatalogo(texto) {
+  errorCatalogo.textContent = texto;
+  errorCatalogo.hidden = false;
+}
+
+function ocultarErrorDetalle() {
+  errorDetalle.textContent = "";
+  errorDetalle.hidden = true;
+  botonReintentarDetalle.hidden = true;
+}
+
+function mostrarErrorDetalle(texto) {
+  errorDetalle.textContent = texto;
+  errorDetalle.hidden = false;
+}
+
+function limpiarCatalogoUI() {
+  estadoCatalogoUI.limpiar();
+  cargandoBusqueda = false;
+  cargandoDetalle = false;
+  reintentoBusqueda = null;
+  detallePendiente = null;
+  focoDetalle = null;
+
+  formBusqueda.reset();
+  listaPeliculas.replaceChildren();
+  resultados.hidden = true;
+  resumenResultados.textContent = "";
+  paginaActual.textContent = "";
+  paginacion.hidden = true;
+
+  detallePelicula.hidden = true;
+  detalleContenido.hidden = true;
+  detalleCartel.replaceChildren();
+  detalleTitulo.textContent = "";
+  detalleAnio.textContent = "";
+  detalleDuracion.textContent = "";
+  detalleGeneros.textContent = "";
+  detalleSinopsis.textContent = "";
+
+  estadoCatalogo.textContent = "";
+  estadoDetalle.textContent = "";
+  ocultarErrorCatalogo();
+  ocultarErrorDetalle();
+  actualizarControlesCatalogo();
+}
+
+function crearTextoCartelNoDisponible() {
+  const texto = document.createElement("span");
+  texto.className = "cartel-no-disponible";
+  texto.textContent = TEXTO_CARTEL_AUSENTE;
+  return texto;
+}
+
+function crearCartel(url, titulo) {
+  const marco = document.createElement("span");
+  marco.className = "cartel-marco";
+  const urlSegura = urlCartelSegura(url);
+
+  if (!urlSegura) {
+    marco.append(crearTextoCartelNoDisponible());
+    return marco;
+  }
+
+  const imagen = document.createElement("img");
+  imagen.className = "cartel-imagen";
+  imagen.src = urlSegura;
+  imagen.alt = `Cartel de ${titulo}`;
+  imagen.loading = "lazy";
+  imagen.decoding = "async";
+  imagen.addEventListener("error", () => {
+    imagen.remove();
+    marco.append(crearTextoCartelNoDisponible());
+  }, { once: true });
+  marco.append(imagen);
+  return marco;
+}
+
+function crearTarjeta(pelicula) {
+  const titulo = textoTitulo(pelicula?.titulo);
+  const anio = textoAnio(pelicula?.anio);
+  const item = document.createElement("li");
+  const boton = document.createElement("button");
+
+  boton.type = "button";
+  boton.className = "tarjeta-pelicula";
+  boton.setAttribute("aria-label", `Ver ficha de ${titulo}. ${anio}`);
+
+  const datos = document.createElement("span");
+  datos.className = "tarjeta-datos";
+
+  const tituloElemento = document.createElement("span");
+  tituloElemento.className = "tarjeta-titulo";
+  tituloElemento.textContent = titulo;
+
+  const anioElemento = document.createElement("span");
+  anioElemento.className = "tarjeta-anio";
+  anioElemento.textContent = anio;
+
+  datos.append(tituloElemento, anioElemento);
+  boton.append(crearCartel(pelicula?.cartel, titulo), datos);
+  boton.addEventListener("click", () => abrirDetalle(pelicula, boton));
+  item.append(boton);
+  return item;
+}
+
+function renderizarResultados() {
+  const busqueda = estadoCatalogoUI.busqueda;
+
+  listaPeliculas.replaceChildren();
+  ocultarErrorCatalogo();
+
+  if (!busqueda || busqueda.peliculas.length === 0) {
+    resultados.hidden = true;
+    resumenResultados.textContent = "";
+    paginaActual.textContent = "";
+    paginacion.hidden = true;
+    estadoCatalogo.textContent =
+      "No se encontraron películas con esos criterios. Prueba otro título o año.";
+    actualizarControlesCatalogo();
+    return;
+  }
+
+  for (const pelicula of busqueda.peliculas) {
+    listaPeliculas.append(crearTarjeta(pelicula));
+  }
+
+  resumenResultados.textContent = textoResumenResultados(busqueda);
+  paginaActual.textContent = textoPaginaActual(
+    busqueda.pagina,
+    busqueda.totalPaginas
+  );
+  paginacion.hidden = false;
+  resultados.hidden = false;
+  estadoCatalogo.textContent = "";
+  actualizarControlesCatalogo();
+}
+
+function renderizarDetalle(ficha) {
+  const titulo = textoTitulo(ficha?.titulo);
+  const anio = textoAnio(ficha?.anio);
+
+  detalleCartel.replaceChildren(crearCartel(ficha?.cartel, titulo));
+  detalleTitulo.textContent = titulo;
+  detalleAnio.textContent = anio === TEXTO_ANIO_AUSENTE
+    ? anio
+    : `Año: ${anio}`;
+  detalleDuracion.textContent = textoDuracion(ficha?.duracion);
+  detalleGeneros.textContent = textoGeneros(ficha?.generos);
+  detalleSinopsis.textContent = textoSinopsis(ficha?.sinopsis);
+  detalleContenido.hidden = false;
+  estadoDetalle.textContent = "";
+  ocultarErrorDetalle();
+  actualizarControlesCatalogo();
+}
+
+function volverAlAccesoPorSesion() {
+  mostrarUsuario(null);
+  mostrarMensaje(
+    "Tu sesión ya no es válida. Vuelve a iniciar sesión.",
+    true
+  );
+  document.getElementById("login-email").focus();
+}
+
+async function ejecutarBusqueda(consulta, solicitudExistente = null) {
+  if (!usuarioActual || ocupado) return;
+
+  cerrarDetalle({ restaurarFoco: false });
+
+  const solicitud = solicitudExistente ??
+    estadoCatalogoUI.iniciarBusqueda(
+      consulta.titulo,
+      consulta.anio,
+      consulta.pagina ?? 1
+    );
+
+  reintentoBusqueda = { ...solicitud.consulta };
+  cargandoBusqueda = true;
+
+  listaPeliculas.replaceChildren();
+  resultados.hidden = true;
+  paginacion.hidden = true;
+  resumenResultados.textContent = "";
+  paginaActual.textContent = "";
+  estadoCatalogo.textContent = "Buscando películas...";
+  ocultarErrorCatalogo();
+  actualizarControlesCatalogo();
+
+  try {
+    const respuesta = await buscarPeliculas(solicitud.consulta);
+
+    if (!estadoCatalogoUI.esVigenteBusqueda(solicitud) || !usuarioActual) {
+      return;
+    }
+
+    if (!estadoCatalogoUI.confirmarBusqueda(solicitud, respuesta)) return;
+
+    reintentoBusqueda = null;
+    renderizarResultados();
+
+    if (estadoCatalogoUI.busqueda.peliculas.length > 0) {
+      resumenResultados.focus();
+    } else {
+      estadoCatalogo.focus();
+    }
+  } catch (error) {
+    if (!estadoCatalogoUI.esVigenteBusqueda(solicitud) || !usuarioActual) {
+      return;
+    }
+
+    if (error?.estado === 401) {
+      volverAlAccesoPorSesion();
+      return;
+    }
+
+    estadoCatalogo.textContent = "";
+    mostrarErrorCatalogo(
+      error?.message ?? "No se pudo realizar la búsqueda."
+    );
+    botonReintentarCatalogo.hidden = false;
+    errorCatalogo.focus();
+  } finally {
+    if (estadoCatalogoUI.esVigenteBusqueda(solicitud)) {
+      cargandoBusqueda = false;
+      actualizarControlesCatalogo();
+    }
+  }
+}
+
+async function cargarDetalle(id) {
+  if (!usuarioActual || ocupado) return;
+
+  const solicitud = estadoCatalogoUI.iniciarDetalle(id);
+
+  detallePendiente = { id };
+  cargandoDetalle = true;
+  detalleContenido.hidden = true;
+  detalleCartel.replaceChildren();
+  detalleTitulo.textContent = "";
+  detalleAnio.textContent = "";
+  detalleDuracion.textContent = "";
+  detalleGeneros.textContent = "";
+  detalleSinopsis.textContent = "";
+  estadoDetalle.textContent = "Cargando ficha...";
+  ocultarErrorDetalle();
+  actualizarControlesCatalogo();
+
+  try {
+    const ficha = await obtenerDetallePelicula(id);
+
+    if (!estadoCatalogoUI.esVigenteDetalle(solicitud) || !usuarioActual) {
+      return;
+    }
+
+    if (!estadoCatalogoUI.confirmarDetalle(solicitud, ficha)) return;
+
+    renderizarDetalle(ficha);
+    detalleTitulo.focus();
+  } catch (error) {
+    if (!estadoCatalogoUI.esVigenteDetalle(solicitud) || !usuarioActual) {
+      return;
+    }
+
+    if (error?.estado === 401) {
+      volverAlAccesoPorSesion();
+      return;
+    }
+
+    estadoDetalle.textContent = "";
+    mostrarErrorDetalle(
+      error?.message ?? "No se pudo cargar la ficha de la película."
+    );
+    botonReintentarDetalle.hidden = false;
+    errorDetalle.focus();
+  } finally {
+    if (estadoCatalogoUI.esVigenteDetalle(solicitud)) {
+      cargandoDetalle = false;
+      actualizarControlesCatalogo();
+    }
+  }
+}
+
+function abrirDetalle(pelicula, boton) {
+  if (ocupado || !usuarioActual) return;
+
+  if (!Number.isSafeInteger(pelicula?.id) || pelicula.id <= 0) {
+    mostrarMensaje("No se pudo abrir la ficha de la película.", true);
+    return;
+  }
+
+  focoDetalle = boton ?? null;
+  resultados.hidden = true;
+  detallePelicula.hidden = false;
+  detallePelicula.focus();
+  cargarDetalle(pelicula.id);
+}
+
+function cerrarDetalle({ restaurarFoco = true } = {}) {
+  estadoCatalogoUI.cerrarDetalle();
+  cargandoDetalle = false;
+  detallePendiente = null;
+
+  detallePelicula.hidden = true;
+  detalleContenido.hidden = true;
+  detalleCartel.replaceChildren();
+  detalleTitulo.textContent = "";
+  detalleAnio.textContent = "";
+  detalleDuracion.textContent = "";
+  detalleGeneros.textContent = "";
+  detalleSinopsis.textContent = "";
+  estadoDetalle.textContent = "";
+  ocultarErrorDetalle();
+
+  const busqueda = estadoCatalogoUI.busqueda;
+  resultados.hidden = !busqueda || busqueda.peliculas.length === 0;
+  actualizarControlesCatalogo();
+
+  const destino = focoDetalle;
+  focoDetalle = null;
+
+  if (restaurarFoco && destino?.isConnected) {
+    destino.focus();
+  }
+}
+
+function irAPagina(direccion) {
+  if (ocupado || cargandoBusqueda || !usuarioActual) return;
+
+  const solicitud = direccion === "anterior"
+    ? estadoCatalogoUI.irPaginaAnterior()
+    : estadoCatalogoUI.irPaginaSiguiente();
+
+  if (!solicitud) return;
+
+  ejecutarBusqueda(solicitud.consulta, solicitud);
+}
+
+function validarFormularioBusqueda() {
+  const validacion = validarBusqueda({
+    titulo: busquedaTitulo.value,
+    anio: busquedaAnio.value
+  });
+
+  busquedaTitulo.removeAttribute("aria-invalid");
+  busquedaAnio.removeAttribute("aria-invalid");
+
+  if (validacion.valido) return validacion;
+
+  const campo = validacion.campo === "anio" ? busquedaAnio : busquedaTitulo;
+  campo.setAttribute("aria-invalid", "true");
+  campo.focus();
+  mostrarErrorCatalogo(validacion.error);
+  botonReintentarCatalogo.hidden = true;
+  return null;
+}
+
+formBusqueda.addEventListener("submit", evento => {
+  evento.preventDefault();
+
+  if (ocupado || !usuarioActual) return;
+
+  const validacion = validarFormularioBusqueda();
+  if (!validacion) return;
+
+  ejecutarBusqueda({
+    titulo: validacion.titulo,
+    anio: validacion.anio,
+    pagina: 1
+  });
+});
+
+botonAnterior.addEventListener("click", () => irAPagina("anterior"));
+botonSiguiente.addEventListener("click", () => irAPagina("siguiente"));
+
+botonReintentarCatalogo.addEventListener("click", () => {
+  if (ocupado || cargandoBusqueda || !reintentoBusqueda) return;
+  ejecutarBusqueda({ ...reintentoBusqueda });
+});
+
+botonReintentarDetalle.addEventListener("click", () => {
+  if (ocupado || cargandoDetalle || !detallePendiente) return;
+  cargarDetalle(detallePendiente.id);
+});
+
+botonVolver.addEventListener("click", () => cerrarDetalle());
+
+detallePelicula.addEventListener("keydown", evento => {
+  if (evento.key === "Escape") {
+    evento.preventDefault();
+    cerrarDetalle();
+  }
+});
 
 formRegistro.addEventListener("submit", async evento => {
   evento.preventDefault();
