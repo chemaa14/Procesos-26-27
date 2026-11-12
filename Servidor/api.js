@@ -1,3 +1,6 @@
+import { ErrorDatos } from "./errores-datos.js";
+import { PreferenciasPlataformas } from "./preferencias-plataformas.js";
+import { ErrorPlataformas, validarSeleccionPlataformas } from "./plataformas-tmdb.js";
 import { ErrorBusquedaPeliculas } from "./busqueda-peliculas.js";
 import { ErrorDetallePelicula } from "./detalle-pelicula.js";
 import { ErrorCatalogoTMDB } from "./catalogo-tmdb.js";
@@ -215,7 +218,9 @@ export function crearAplicacion({
   sesiones = new Sesiones({ duracionMs: DURACION_SESION_SEGUNDOS * 1000 }),
   registrarActividad = crearRegistroActividad(),
   catalogo = null,
-  detalle = null
+  detalle = null,
+  plataformas = null,
+  preferencias = new PreferenciasPlataformas(datos)
 } = {})
  {
 
@@ -437,6 +442,32 @@ async function exigirUsuario(peticion) {
           return responderJSON(respuesta, 200, { usuario });
         }
 
+        if (ruta === "/api/plataformas" || ruta === "/api/preferencias/plataformas") {
+          const esCatalogo = ruta === "/api/plataformas";
+          if (metodo !== "GET" && (esCatalogo || metodo !== "PUT")) {
+            return metodoNoPermitido(respuesta, esCatalogo ? "GET" : "GET, PUT");
+          }
+          const usuario = await exigirUsuario(peticion);
+          actividad.usuarioId = usuario.id;
+          if (url.search) throw new ErrorDatos("PREFERENCIAS_INVALIDAS", "Las preferencias no son válidas.");
+          if (esCatalogo) {
+            if (!plataformas) throw new ErrorPlataformas("CATALOGO_NO_CONFIGURADO");
+            return responderJSON(respuesta, 200, await plataformas.listar());
+          }
+          if (metodo === "GET") {
+            return responderJSON(respuesta, 200, await preferencias.obtener(usuario.id));
+          }
+          comprobarCabeceraCliente(peticion);
+          const ids = validarSeleccionPlataformas(await leerJSON(peticion));
+          if (ids.length) {
+            if (!plataformas) throw new ErrorPlataformas("CATALOGO_NO_CONFIGURADO");
+            const catalogoES = await plataformas.listar();
+            const admitidas = new Set(catalogoES.plataformas.map(p => p.id));
+            if (ids.some(id => !admitidas.has(id))) throw new ErrorPlataformas("PLATAFORMA_NO_ADMITIDA");
+          }
+          return responderJSON(respuesta, 200, await preferencias.guardar(usuario.id, ids));
+        }
+
         const rutaDetalle = ruta.match(/^\/api\/peliculas\/([^/]+)$/);
 
         if (ruta === "/api/peliculas" || rutaDetalle) {
@@ -624,6 +655,24 @@ async function exigirUsuario(peticion) {
     } catch (error) {
       actividad.codigo = error?.codigo ?? error?.code;
       if (respuesta.destroyed || respuesta.writableEnded) return;
+
+      if (error instanceof ErrorPlataformas) {
+        const estados = { PLATAFORMAS_RESPUESTA_INVALIDA: 502,
+          CATALOGO_NO_CONFIGURADO: 503, PLATAFORMA_NO_ADMITIDA: 400 };
+        const estado = estados[error.codigo] ?? 500;
+        return responderJSON(respuesta, estado, {
+          error: estado === 500 ? "Error interno del servidor." : error.message,
+          codigo: estado === 500 ? "ERROR_INTERNO" : error.codigo
+        });
+      }
+      if (error instanceof ErrorDatos && error.codigo === "PREFERENCIAS_INVALIDAS") {
+        return responderJSON(respuesta, 400, {
+          error: "Las preferencias no son válidas.", codigo: "PREFERENCIAS_INVALIDAS"
+        });
+      }
+      if (error instanceof ErrorDatos && error.codigo === "USUARIO_NO_ENCONTRADO") {
+        return responderJSON(respuesta, 401, { error: "Se requiere una sesión válida." });
+      }
 
       if (error instanceof ErrorBusquedaPeliculas) {
         const esEntrada = error.codigo === "ENTRADA_INVALIDA";

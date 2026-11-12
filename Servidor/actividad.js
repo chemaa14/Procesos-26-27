@@ -31,7 +31,7 @@ const RUTAS = new Set([
   "/api/confirmacion", "/api/confirmacion/reenviar",
   "/api/auth/google", "/api/auth/google/callback",
   "/api/logout", "/api/sesion", "/api/perfil", "/api/usuarios", "/api/peliculas",
-  "/api/peliculas/:id", "/api/usuarios/:id", "/api/usuarios/:id/activo", "otra"
+  "/api/plataformas", "/api/preferencias/plataformas", "/api/peliculas/:id", "/api/usuarios/:id", "/api/usuarios/:id/activo", "otra"
 ]);
 const METODOS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -52,6 +52,7 @@ const CODIGOS = new Set([
   "DETALLE_INVALIDO", "PELICULA_NO_ENCONTRADA", "DETALLE_RESPUESTA_INVALIDA",
   "TMDB_AUTENTICACION", "TMDB_NO_ENCONTRADO", "TMDB_LIMITE", "TMDB_HTTP",
   "TMDB_RED", "TMDB_TIMEOUT", "TMDB_RESPUESTA_INVALIDA", "CONFIGURACION_TMDB_INVALIDA",
+  "PREFERENCIAS_INVALIDAS", "PLATAFORMAS_RESPUESTA_INVALIDA", "PLATAFORMA_NO_ADMITIDA",
   "23505", "23514", "28P01", "3D000", "42P01", "42703", "42501",
   "ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "EADDRINUSE"
 ]);

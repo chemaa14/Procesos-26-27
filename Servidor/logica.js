@@ -90,7 +90,16 @@ export class LogicaUsuarios {
     }
     const correo = normalizarEmail(email);
     const conflicto = () => new ErrorUsuarios("OAUTH_CUENTA_EXISTENTE", "Ya existe una cuenta con ese correo. Entra con tu contraseña.");
-    if (await this.datos.buscarPorEmail(correo)) throw conflicto();
+    const cuentaCorreo = await this.datos.buscarPorEmail(correo);
+    if (cuentaCorreo) {
+      // Otra petición puede haber creado este mismo sub entre las dos lecturas.
+      const concurrente = await this.datos.buscarPorGoogleSub(sub);
+      if (concurrente && concurrente.id === cuentaCorreo.id) {
+        if (concurrente.eliminado || !concurrente.confirmado) throw denegado();
+        return concurrente;
+      }
+      throw conflicto();
+    }
     const usuario = {
       id: randomUUID(), nombre: typeof nombre === "string" && nombre.trim() ? nombre.trim() : correo,
       email: correo, rol: "usuario", confirmado: true, eliminado: false
