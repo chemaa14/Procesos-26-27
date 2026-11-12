@@ -171,7 +171,7 @@ test("normaliza la respuesta y respeta la paginación y el año opcional", async
       language: "es-ES",
       include_adult: false,
       page: 2,
-      year: 2020
+      primary_release_year: 2020
     });
 
     const sinAnio = await buscar(base, cookie, "?titulo=Matrix");

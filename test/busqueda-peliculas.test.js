@@ -66,8 +66,9 @@ test("normaliza los resultados y consulta /search/movie con el contrato acordado
     language: "es-ES",
     include_adult: false,
     page: 2,
-    year: 2020
+    primary_release_year: 2020
   });
+  assert.equal("year" in control.parametros, false);
   assert.deepEqual(resultado, {
     pagina: 2,
     totalPaginas: 3,
@@ -89,7 +90,7 @@ test("normaliza los resultados y consulta /search/movie con el contrato acordado
   });
 });
 
-test("usa la página 1 y omite year cuando no se indican; los vacíos no son un fallo", async () => {
+test("usa la página 1 y omite primary_release_year cuando no se indican; los vacíos no son un fallo", async () => {
   const { servicio, control } = servicioCon(respuestaProveedor());
 
   const resultado = await servicio.buscar({ titulo: "Matrix" });

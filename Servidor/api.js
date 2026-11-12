@@ -26,6 +26,10 @@ const archivosPublicos = {
   "/rest.js": {
     ruta: new URL("../Cliente/rest.js", import.meta.url),
     tipo: "text/javascript; charset=utf-8"
+  },
+  "/catalogo.js": {
+    ruta: new URL("../Cliente/catalogo.js", import.meta.url),
+    tipo: "text/javascript; charset=utf-8"
   }
 };
 

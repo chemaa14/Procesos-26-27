@@ -145,3 +145,21 @@ export function confirmarCorreo(token) {
 export function reenviarConfirmacion(email) {
   return realizarPeticion("/api/confirmacion/reenviar", { metodo: "POST", datos: { email } });
 }
+
+export function buscarPeliculas({ titulo, anio, pagina } = {}) {
+  const parametros = new URLSearchParams();
+
+  if (titulo !== undefined) parametros.set("titulo", titulo);
+  if (anio !== undefined && anio !== null && anio !== "") {
+    parametros.set("anio", anio);
+  }
+  if (pagina !== undefined && pagina !== null) {
+    parametros.set("pagina", String(pagina));
+  }
+
+  return realizarPeticion(`/api/peliculas?${parametros.toString()}`);
+}
+
+export function obtenerDetallePelicula(id) {
+  return realizarPeticion(`/api/peliculas/${encodeURIComponent(id)}`);
+}

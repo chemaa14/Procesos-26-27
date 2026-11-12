@@ -50,6 +50,7 @@ Los logs de actividad se emiten como JSON por la salida estándar.
 - `Cliente/index.html`: formularios, perfil y tabla de administración.
 - `Cliente/gui.js`: interacción y presentación; muestra datos con `textContent`.
 - `Cliente/rest.js`: peticiones HTTP del mismo origen, con cookie de sesión.
+- `Cliente/catalogo.js`: validación, datos ausentes, URLs de cartel y estado del buscador.
 - `Servidor/api.js`: rutas, validación HTTP y autorización.
 - `Servidor/logica.js`: reglas de negocio y eliminación con permisos.
 - `Servidor/datos.js`: repositorio en memoria para pruebas.
@@ -188,7 +189,7 @@ Parámetros y límites:
   proveedor parámetros arbitrarios.
 
 La consulta interna es `GET /search/movie` con `query`, `language=es-ES`,
-`include_adult=false`, `page` y, si se indica, `year`. No se filtra por país de
+`include_adult=false`, `page` y, si se indica, `primary_release_year`. No se filtra por país de
 producción ni se restringe el catálogo al cine español. La respuesta propia es:
 
 ```json
@@ -317,6 +318,58 @@ node --test test/detalle-pelicula.test.js test/api-detalle-pelicula.test.js
 Fuente oficial:
 - <https://developer.themoviedb.org/reference/movie-details>
 
+## Sprint 2: buscador y ficha (S2-01-T05)
+
+El panel de catálogo solo se muestra cuando `/api/sesion` confirma una cuenta
+válida, confirmada y no eliminada. No depende de que el catálogo externo esté
+configurado: las cuentas, el perfil, la administración, Google y la confirmación
+por correo siguen funcionando aunque TMDB falle.
+
+Recorrido de la interfaz:
+
+1. **Buscar.** El formulario pide un título obligatorio de hasta 200 caracteres
+   y un año opcional de cuatro dígitos. La búsqueda solo se lanza al enviar el
+   formulario, nunca con cada tecla. Cada búsqueda nueva reinicia la página a 1.
+2. **Resultados.** Cada tarjeta muestra cartel, título y año para distinguir
+   homónimos. Si falta el cartel o la imagen no carga, se conserva el mismo
+   espacio con el texto «Cartel no disponible». Los datos ausentes se marcan
+   como no disponibles; no se inventan.
+3. **Paginación.** Anterior y Siguiente muestran la página actual y respetan
+   `totalPaginas` y el máximo de 500. Estos botones permanecen deshabilitados
+   cuando no hay una página disponible.
+4. **Ficha.** Al elegir una tarjeta se consulta `GET /api/peliculas/:id` y se
+   muestra título, año, sinopsis, géneros, duración y cartel. Volver a
+   resultados conserva el texto, el año y la página, y devuelve el foco a la
+   tarjeta de origen. El detalle también se puede cerrar con Escape.
+5. **Estados.** Hay mensajes distintos para carga, error recuperable con
+   reintento, búsqueda sin resultados y respuesta 401. Un 401 devuelve a la
+   vista de acceso y borra el estado del catálogo.
+
+La comunicación está en `Cliente/rest.js` mediante `buscarPeliculas()` y
+`obtenerDetallePelicula()`. Reutilizan `realizarPeticion()`, `URLSearchParams` y
+`encodeURIComponent`, con cookies del mismo origen, `cache: no-store` y sin
+exponer nunca el token de TMDB en el navegador. No se registran consultas en
+logs. `Cliente/catalogo.js` concentra la validación, el formato de datos
+ausentes, la comprobación de URLs de cartel y el estado de búsqueda y detalle
+que descarta respuestas antiguas.
+
+La vista incluye el aviso obligatorio «This product uses the TMDB API but is not
+endorsed or certified by TMDB.» y un enlace a
+<https://www.themoviedb.org/>. No se muestra disponibilidad de plataformas ni
+JustWatch en esta tarea. No se añaden variables de entorno, secretos ni
+migraciones: se reutilizan `TMDB_READ_ACCESS_TOKEN` y `TMDB_TIMEOUT_MS` del
+servidor.
+
+Pruebas de comunicación y estado de la interfaz, sin credenciales ni llamadas
+reales:
+
+```powershell
+node --test test/cliente-rest.test.js test/catalogo-cliente.test.js
+```
+
+La comprobación visual con cuentas reales corresponde a la validación manual del
+navegador.
+
 ## Primer administrador y cuentas de prueba
 
 1. Registrar una cuenta desde la aplicación y confirmarla mediante el correo recibido.
@@ -365,6 +418,8 @@ equivale a `/users` en las tareas y `/activo` a `/active`.
 | POST `/api/logout` | Cierra la sesión y borra su cookie |
 | GET `/api/perfil` | Datos de la propia cuenta |
 | DELETE `/api/perfil` | Elimina la propia cuenta |
+| GET `/api/peliculas` | Sesión válida; búsqueda paginada en el catálogo |
+| GET `/api/peliculas/:id` | Sesión válida; ficha normalizada de una película |
 | GET `/api/usuarios` | Administrador; listado de cuentas no eliminadas con rol y estado |
 | POST `/api/usuarios` | Administrador; alta sin contraseña, conservada de la API inicial |
 | GET `/api/usuarios/:id/activo` | Administrador; devuelve `{ activo: boolean }` |

@@ -148,7 +148,7 @@ export function crearServicioBusqueda(catalogo) {
         page: pagina
       };
 
-      if (anio !== undefined) parametros.year = anio;
+      if (anio !== undefined) parametros.primary_release_year = anio;
 
       return normalizarRespuesta(
         await catalogo.consultar("/search/movie", parametros),
