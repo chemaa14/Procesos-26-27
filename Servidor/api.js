@@ -1,3 +1,6 @@
+import { ErrorBusquedaPeliculas } from "./busqueda-peliculas.js";
+import { ErrorDetallePelicula } from "./detalle-pelicula.js";
+import { ErrorCatalogoTMDB } from "./catalogo-tmdb.js";
 import { ErrorConfirmacion } from "./confirmaciones.js";
 import { ErrorOAuth, crearValorOAuth } from "./google-oauth.js";
 import { IntentosOAuth } from "./intentos-oauth.js";
@@ -175,6 +178,30 @@ function comprobarCabeceraCliente(peticion) {
   }
 }
 
+const PARAMETROS_BUSQUEDA = new Set(["titulo", "anio", "pagina"]);
+
+function leerConsultaBusqueda(url) {
+  for (const [clave] of url.searchParams) {
+    if (!PARAMETROS_BUSQUEDA.has(clave)) {
+      throw new ErrorBusquedaPeliculas("ENTRADA_INVALIDA");
+    }
+  }
+
+  const consulta = {};
+
+  for (const clave of PARAMETROS_BUSQUEDA) {
+    const valores = url.searchParams.getAll(clave);
+
+    if (valores.length > 1) {
+      throw new ErrorBusquedaPeliculas("ENTRADA_INVALIDA");
+    }
+
+    if (valores.length === 1) consulta[clave] = valores[0];
+  }
+
+  return consulta;
+}
+
 export function crearAplicacion({
   cookieSegura = process.env.NODE_ENV === "production",
   datos = new DatosUsuarios(),
@@ -182,7 +209,9 @@ export function crearAplicacion({
   confirmaciones = null,
   intentosOAuth = new IntentosOAuth(),
   sesiones = new Sesiones({ duracionMs: DURACION_SESION_SEGUNDOS * 1000 }),
-  registrarActividad = crearRegistroActividad()
+  registrarActividad = crearRegistroActividad(),
+  catalogo = null,
+  detalle = null
 } = {})
  {
 
@@ -404,6 +433,46 @@ async function exigirUsuario(peticion) {
           return responderJSON(respuesta, 200, { usuario });
         }
 
+        const rutaDetalle = ruta.match(/^\/api\/peliculas\/([^/]+)$/);
+
+        if (ruta === "/api/peliculas" || rutaDetalle) {
+          if (metodo !== "GET") {
+            return metodoNoPermitido(respuesta, "GET");
+          }
+
+          const usuario = await exigirUsuario(peticion);
+          actividad.usuarioId = usuario.id;
+
+          if (rutaDetalle) {
+            if (!detalle) {
+              actividad.codigo = "CATALOGO_NO_CONFIGURADO";
+              return responderJSON(respuesta, 503, {
+                error: "El catálogo no está disponible.",
+                codigo: "CATALOGO_NO_CONFIGURADO"
+              });
+            }
+
+            if (url.search) throw new ErrorDetallePelicula("ENTRADA_INVALIDA");
+
+            const ficha = await detalle.obtener(rutaDetalle[1]);
+
+            return responderJSON(respuesta, 200, ficha);
+          }
+
+          if (!catalogo) {
+            actividad.codigo = "CATALOGO_NO_CONFIGURADO";
+            return responderJSON(respuesta, 503, {
+              error: "El catálogo no está disponible.",
+              codigo: "CATALOGO_NO_CONFIGURADO"
+            });
+          }
+
+          const consulta = leerConsultaBusqueda(url);
+          const resultado = await catalogo.buscar(consulta);
+
+          return responderJSON(respuesta, 200, resultado);
+        }
+
         if (url.pathname === "/api/logout") {
           if (peticion.method !== "POST") {
             return metodoNoPermitido(respuesta, "POST");
@@ -551,6 +620,53 @@ async function exigirUsuario(peticion) {
     } catch (error) {
       actividad.codigo = error?.codigo ?? error?.code;
       if (respuesta.destroyed || respuesta.writableEnded) return;
+
+      if (error instanceof ErrorBusquedaPeliculas) {
+        const esEntrada = error.codigo === "ENTRADA_INVALIDA";
+        return responderJSON(respuesta, esEntrada ? 400 : 502, {
+          error: error.message,
+          codigo: esEntrada ? "BUSQUEDA_INVALIDA" : "CATALOGO_RESPUESTA_INVALIDA"
+        });
+      }
+
+      if (error instanceof ErrorDetallePelicula) {
+        const estados = {
+          ENTRADA_INVALIDA: 400,
+          PELICULA_NO_ENCONTRADA: 404,
+          RESPUESTA_PROVEEDOR_INVALIDA: 502
+        };
+        const codigos = {
+          ENTRADA_INVALIDA: "DETALLE_INVALIDO",
+          PELICULA_NO_ENCONTRADA: "PELICULA_NO_ENCONTRADA",
+          RESPUESTA_PROVEEDOR_INVALIDA: "DETALLE_RESPUESTA_INVALIDA"
+        };
+        const estado = estados[error.codigo] ?? 500;
+
+        return responderJSON(respuesta, estado, {
+          error: estado === 500 ? "Error interno del servidor." : error.message,
+          codigo: codigos[error.codigo] ?? "ERROR_INTERNO"
+        });
+      }
+
+      if (error instanceof ErrorCatalogoTMDB) {
+        const estados = {
+          TMDB_TIMEOUT: 504,
+          TMDB_LIMITE: 503
+        };
+        const estado = estados[error.codigo] ?? 502;
+        const codigos = {
+          TMDB_TIMEOUT: "CATALOGO_TIMEOUT",
+          TMDB_LIMITE: "CATALOGO_LIMITE"
+        };
+        return responderJSON(respuesta, estado, {
+          error: estado === 504
+            ? "El catálogo tardó demasiado en responder."
+            : estado === 503
+              ? "El catálogo está limitando las peticiones."
+              : "No se pudo consultar el catálogo.",
+          codigo: codigos[error.codigo] ?? "CATALOGO_NO_DISPONIBLE"
+        });
+      }
 
       if (error instanceof ErrorConfirmacion) {
         return responderJSON(respuesta, error.estado, { error: error.message, codigo: error.codigo });

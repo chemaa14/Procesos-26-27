@@ -1,3 +1,6 @@
+import { crearServicioBusqueda } from "./busqueda-peliculas.js";
+import { crearServicioDetalle } from "./detalle-pelicula.js";
+import { crearCatalogoTMDB } from "./catalogo-tmdb.js";
 import { crearCorreo } from "./correo.js";
 import { Confirmaciones } from "./confirmaciones.js";
 import { ConfirmacionesPostgres } from "./confirmaciones-postgres.js";
@@ -27,8 +30,14 @@ try {
   const confirmaciones = new Confirmaciones({ repositorio: new ConfirmacionesPostgres(pool),
     correo, urlPublica: correo.urlPublica, registrarActividad });
   const datos = new DatosUsuariosPostgres(pool);
+  const tokenTmdb = process.env.TMDB_READ_ACCESS_TOKEN;
+  const adaptadorTmdb = typeof tokenTmdb === "string" && tokenTmdb.trim()
+    ? crearCatalogoTMDB(process.env)
+    : null;
+  const catalogo = adaptadorTmdb ? crearServicioBusqueda(adaptadorTmdb) : null;
+  const detalle = adaptadorTmdb ? crearServicioDetalle(adaptadorTmdb) : null;
   const aplicacion = crearAplicacion({ datos, confirmaciones, registrarActividad, google: crearGoogleOAuth(),
-    sesiones: new SesionesPostgres(pool), intentosOAuth: new IntentosOAuthPostgres(pool) });
+    sesiones: new SesionesPostgres(pool), intentosOAuth: new IntentosOAuthPostgres(pool), catalogo, detalle });
   servidor = aplicacion.servidor;
 
   const puerto = Number(process.env.PORT || 3000);
