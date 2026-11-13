@@ -3,424 +3,180 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#201827">
+  <meta name="color-scheme" content="dark">
   <title>CineMatch</title>
+  <link rel="stylesheet" href="/estilos.css">
   <script type="module" src="/gui.js"></script>
-
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-      margin: 0;
-      background: #f5f5f5;
-      color: #202020;
-    }
-
-    main {
-      max-width: 760px;
-      margin: auto;
-      padding: 24px;
-    }
-
-    section {
-      background: white;
-      padding: 24px;
-      margin: 20px 0;
-      border: 1px solid #ddd;
-      border-radius: 12px;
-    }
-
-    label {
-      display: block;
-      margin-top: 16px;
-      font-weight: 600;
-    }
-
-    input {
-      box-sizing: border-box;
-      width: 100%;
-      padding: 10px;
-      margin-top: 6px;
-      font: inherit;
-      border: 1px solid #777;
-      border-radius: 6px;
-    }
-
-    button {
-      padding: 10px 18px;
-      margin-top: 18px;
-      font: inherit;
-      cursor: pointer;
-    }
-
-    button:disabled {
-      cursor: wait;
-    }
-
-    :focus-visible {
-      outline: 3px solid #7340a3;
-      outline-offset: 3px;
-    }
-
-    #panel-plataformas fieldset { min-width: 0; margin: 18px 0; border: 1px solid #ddd; border-radius: 6px; }
-    .lista-plataformas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 8px; max-height: 320px; overflow-y: auto; padding: 4px; }
-    .opcion-plataforma { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px; font-weight: 400; border: 1px solid #ddd; border-radius: 6px; overflow-wrap: anywhere; cursor: pointer; }
-    .opcion-plataforma input { flex: 0 0 auto; width: 20px; height: 20px; margin: 2px 0 0; padding: 0; }
-    .opcion-plataforma small { color: #555; }
-    .acciones-plataformas { display: flex; flex-wrap: wrap; gap: 10px; }
-    .acciones-plataformas button { margin-top: 0; }
-
-    .tabla-usuarios { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
-    td button { margin-top: 0; }
-
-    .error {
-      color: #a01515;
-    }
-
-    .campos-busqueda {
-      display: grid;
-      gap: 0 16px;
-    }
-
-    .campos-busqueda > div {
-      min-width: 0;
-    }
-
-    .ayuda-busqueda {
-      margin: 8px 0 0;
-      color: #555;
-      font-size: 0.9rem;
-    }
-
-    .tarjetas-peliculas {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-      gap: 16px;
-      margin: 16px 0 0;
-      padding: 0;
-      list-style: none;
-    }
-
-    .tarjeta-pelicula {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      box-sizing: border-box;
-      width: 100%;
-      height: 100%;
-      margin: 0;
-      padding: 10px;
-      color: inherit;
-      text-align: left;
-      background: white;
-      border: 1px solid #ccc;
-      border-radius: 10px;
-    }
-
-    .tarjeta-pelicula:hover {
-      border-color: #7340a3;
-    }
-
-    .tarjeta-datos {
-      display: block;
-    }
-
-    .tarjeta-titulo {
-      display: block;
-      font-weight: 600;
-      line-height: 1.3;
-    }
-
-    .tarjeta-anio {
-      display: inline-block;
-      margin-top: 6px;
-      padding: 2px 8px;
-      color: white;
-      background: #0d253f;
-      border-radius: 999px;
-      font-size: 0.85rem;
-    }
-
-    .cartel-marco {
-      box-sizing: border-box;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 100%;
-      aspect-ratio: 2 / 3;
-      padding: 8px;
-      overflow: hidden;
-      color: #555;
-      text-align: center;
-      background: #ececec;
-      border-radius: 6px;
-    }
-
-    .cartel-imagen {
-      display: block;
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .cartel-no-disponible {
-      font-size: 0.9rem;
-    }
-
-    #paginacion {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-top: 18px;
-    }
-
-    #paginacion button {
-      margin-top: 0;
-    }
-
-    #pagina-actual {
-      font-weight: 600;
-    }
-
-    .detalle-pelicula {
-      margin-top: 20px;
-      padding-top: 8px;
-      border-top: 1px solid #ddd;
-    }
-
-    .detalle-contenido {
-      display: grid;
-      gap: 20px;
-      margin-top: 16px;
-    }
-
-    .detalle-cartel {
-      width: 100%;
-      max-width: 240px;
-    }
-
-    .detalle-datos h3 {
-      margin-top: 0;
-    }
-
-    .detalle-sinopsis {
-      line-height: 1.6;
-      white-space: pre-line;
-    }
-
-    .disponibilidad-pelicula {
-      margin-top: 20px;
-      padding-top: 16px;
-      border-top: 1px solid #ddd;
-    }
-
-    .disponibilidad-pelicula h4 {
-      margin-top: 0;
-    }
-
-    .grupos-disponibilidad {
-      display: grid;
-      gap: 12px;
-    }
-
-    .grupo-disponibilidad h5 {
-      margin: 0 0 4px;
-    }
-
-    .grupo-disponibilidad ul {
-      margin: 0;
-      padding-left: 20px;
-    }
-
-    .atribucion-disponibilidad,
-    .fecha-disponibilidad {
-      margin: 8px 0 0;
-      color: #555;
-      font-size: 0.85rem;
-    }
-
-    .atribucion-tmdb {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 12px;
-      margin-top: 24px;
-      padding-top: 16px;
-      border-top: 1px solid #ddd;
-      color: #555;
-      font-size: 0.85rem;
-    }
-
-    .atribucion-tmdb p {
-      margin: 0;
-    }
-
-    .atribucion-tmdb img {
-      width: 40px;
-      height: auto;
-    }
-
-    @media (min-width: 640px) {
-      .campos-busqueda {
-        grid-template-columns: minmax(0, 2fr) minmax(9rem, 1fr) auto;
-        align-items: end;
-      }
-
-      .campos-busqueda button {
-        margin-top: 0;
-      }
-
-      .detalle-contenido {
-        grid-template-columns: minmax(160px, 240px) minmax(0, 1fr);
-        align-items: start;
-      }
-    }
-
-    [hidden] {
-      display: none !important;
-    }
-  </style>
 </head>
 
 <body>
-  <main>
-    <h1>CineMatch</h1>
-    <p>Tu próxima película empieza aquí.</p>
+  <a class="salto-contenido" href="#contenido">Saltar al contenido</a>
 
-    <p id="estado" role="status">Comprobando conexión...</p>
-    <p id="estado-sesion" role="status">Comprobando sesión...</p>
-    <p id="mensaje" role="status" aria-live="polite"></p>
-    <button id="reintentar" type="button" hidden>
-      Reintentar conexión
-    </button>
+  <header class="cabecera">
+    <div class="cabecera-interior">
+      <div class="marca">
+        <span class="marca-sello" aria-hidden="true"></span>
+        <h1>CineMatch</h1>
+      </div>
+      <p class="lema">Tu próxima película empieza aquí.</p>
+    </div>
+  </header>
 
-    <section id="panel-confirmacion" hidden aria-labelledby="titulo-confirmacion">
+  <main id="contenido" class="contenido">
+    <div class="barra-estado" aria-label="Estado de la aplicación">
+      <p id="estado" class="estado-linea" role="status">Comprobando conexión...</p>
+      <p id="estado-sesion" class="estado-linea" role="status">Comprobando sesión...</p>
+      <p id="mensaje" class="mensaje-global" role="status" aria-live="polite"></p>
+      <button id="reintentar" class="boton boton-secundario" type="button" hidden>
+        Reintentar conexión
+      </button>
+    </div>
+
+    <section id="panel-confirmacion" class="tarjeta tarjeta-confirmacion" hidden aria-labelledby="titulo-confirmacion">
+      <p class="etiqueta">Cuenta</p>
       <h2 id="titulo-confirmacion">Confirmar cuenta</h2>
       <p>Pulsa el botón para confirmar la cuenta asociada al enlace que recibiste por correo.</p>
-      <button id="confirmar-correo" type="button">Confirmar cuenta</button>
-      <p id="resultado-confirmacion" role="status" aria-live="polite"></p>
+      <button id="confirmar-correo" class="boton boton-primario" type="button">Confirmar cuenta</button>
+      <p id="resultado-confirmacion" class="mensaje-local" role="status" aria-live="polite"></p>
     </section>
 
-    <div id="acceso" hidden>
-      <section aria-labelledby="titulo-registro">
+    <div id="acceso" class="acceso" hidden>
+      <section class="tarjeta acceso-login" aria-labelledby="titulo-login">
+        <p class="etiqueta">Acceso</p>
+        <h2 id="titulo-login">Iniciar sesión</h2>
+
+        <button id="entrar-google" class="boton-google" type="button">
+          <img
+            src="/google-g.svg"
+            alt=""
+            width="40"
+            height="40"
+            aria-hidden="true"
+          >
+          <span>Continuar con Google</span>
+        </button>
+        <p class="separador"><span>o entra con tu correo y contraseña</span></p>
+
+        <form id="form-login">
+          <div class="campo">
+            <label for="login-email">Correo electrónico</label>
+            <input
+              id="login-email"
+              name="email"
+              type="email"
+              autocomplete="username"
+              required
+            >
+          </div>
+
+          <div class="campo">
+            <label for="login-password">Contraseña</label>
+            <input
+              id="login-password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+            >
+            <button type="button" class="boton-revelar" data-password="login-password" aria-controls="login-password" aria-pressed="false" aria-label="Mostrar contraseña"><span data-texto>Mostrar contraseña</span></button>
+          </div>
+
+          <div class="acciones-formulario">
+            <button type="submit" class="boton boton-primario">Entrar</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="tarjeta acceso-registro" aria-labelledby="titulo-registro">
+        <p class="etiqueta">Nueva cuenta</p>
         <h2 id="titulo-registro">Crear cuenta</h2>
 
         <form id="form-registro">
-          <label for="registro-nombre">Nombre</label>
-          <input
-            id="registro-nombre"
-            name="nombre"
-            autocomplete="name"
-            required
-          >
+          <div class="campo">
+            <label for="registro-nombre">Nombre</label>
+            <input
+              id="registro-nombre"
+              name="nombre"
+              autocomplete="name"
+              required
+            >
+          </div>
 
-          <label for="registro-email">Correo electrónico</label>
-          <input
-            id="registro-email"
-            name="email"
-            type="email"
-            autocomplete="username"
-            required
-          >
+          <div class="campo">
+            <label for="registro-email">Correo electrónico</label>
+            <input
+              id="registro-email"
+              name="email"
+              type="email"
+              autocomplete="username"
+              required
+            >
+          </div>
 
-          <label for="registro-password">Contraseña</label>
-          <input
-            id="registro-password"
-            name="password"
-            type="password"
-            autocomplete="new-password"
-            aria-describedby="ayuda-password"
-            required
-          >
-          <button type="button" data-password="registro-password" aria-controls="registro-password" aria-pressed="false" aria-label="Mostrar contraseña"><span aria-hidden="true">👁</span> <span data-texto>Mostrar contraseña</span></button>
-          <p id="ayuda-password">
-            Entre 8 y 128 caracteres. Puedes utilizar una frase con espacios.
-          </p>
+          <div class="campo">
+            <label for="registro-password">Contraseña</label>
+            <input
+              id="registro-password"
+              name="password"
+              type="password"
+              autocomplete="new-password"
+              aria-describedby="ayuda-password"
+              required
+            >
+            <button type="button" class="boton-revelar" data-password="registro-password" aria-controls="registro-password" aria-pressed="false" aria-label="Mostrar contraseña"><span data-texto>Mostrar contraseña</span></button>
+            <p id="ayuda-password" class="ayuda">
+              Entre 8 y 128 caracteres. Puedes utilizar una frase con espacios.
+            </p>
+          </div>
 
-          <button type="submit">Crear cuenta</button>
+          <div class="acciones-formulario">
+            <button type="submit" class="boton boton-primario">Crear cuenta</button>
+          </div>
         </form>
       </section>
 
-      <section aria-labelledby="titulo-login">
-        <h2 id="titulo-login">Iniciar sesión</h2>
-
-        <button id="entrar-google" type="button">Continuar con Google</button>
-        <p>O entra con tu correo y contraseña:</p>
-        <form id="form-login">
-          <label for="login-email">Correo electrónico</label>
-          <input
-            id="login-email"
-            name="email"
-            type="email"
-            autocomplete="username"
-            required
-          >
-
-          <label for="login-password">Contraseña</label>
-          <input
-            id="login-password"
-            name="password"
-            type="password"
-            autocomplete="current-password"
-            required
-          >
-          <button type="button" data-password="login-password" aria-controls="login-password" aria-pressed="false" aria-label="Mostrar contraseña"><span aria-hidden="true">👁</span> <span data-texto>Mostrar contraseña</span></button>
-
-          <button type="submit">Entrar</button>
-        </form>
-      </section>
-      <section aria-labelledby="titulo-reenvio">
+      <section class="tarjeta acceso-reenvio" aria-labelledby="titulo-reenvio">
+        <p class="etiqueta">Confirmación</p>
         <h2 id="titulo-reenvio">¿No has recibido la confirmación?</h2>
         <p>Revisa spam o solicita un nuevo enlace. Utiliza el correo más reciente.</p>
         <form id="form-reenvio">
-          <label for="reenvio-email">Correo electrónico</label>
-          <input id="reenvio-email" name="email" type="email" autocomplete="email" required>
-          <button type="submit">Reenviar confirmación</button>
+          <div class="campo">
+            <label for="reenvio-email">Correo electrónico</label>
+            <input id="reenvio-email" name="email" type="email" autocomplete="email" required>
+          </div>
+          <div class="acciones-formulario">
+            <button type="submit" class="boton boton-secundario">Reenviar confirmación</button>
+          </div>
         </form>
       </section>
     </div>
 
-    <section id="panel-usuario" aria-labelledby="bienvenida" hidden>
-      <h2 id="bienvenida" tabindex="-1"></h2>
-      <p id="correo-usuario"></p>
-      <p id="rol-usuario"></p>
-      <button id="cerrar-sesion" type="button">Cerrar sesión</button>
-      <button id="eliminar-cuenta" type="button"> Eliminar mi cuenta</button>
-    </section>
-
-    <section id="panel-plataformas" aria-labelledby="titulo-plataformas" hidden>
-      <h2 id="titulo-plataformas">Mis plataformas</h2>
-      <p>Disponibilidad para España. Selecciona tus plataformas y guarda los cambios.</p>
-      <p>Las suscripciones, canales y paquetes adicionales se eligen por separado.</p>
-      <form id="form-plataformas">
-        <label for="filtro-plataformas">Filtrar plataformas</label>
-        <input id="filtro-plataformas" type="search" maxlength="200" autocomplete="off" aria-controls="lista-plataformas">
-        <p id="error-preferencias" class="error" role="alert" hidden></p>
-        <button id="reintentar-preferencias" type="button" hidden>Reintentar preferencias</button>
-        <p id="error-plataformas" class="error" role="alert" hidden></p>
-        <button id="reintentar-plataformas" type="button" hidden>Reintentar catálogo de plataformas</button>
-        <fieldset>
-          <legend>Plataformas de streaming</legend>
-          <p id="cantidad-plataformas" role="status"></p>
-          <div id="lista-plataformas" class="lista-plataformas"></div>
-        </fieldset>
-        <p id="resumen-plataformas" role="status" aria-live="polite"></p>
-        <div class="acciones-plataformas">
-          <button id="guardar-plataformas" type="submit">Guardar plataformas</button>
-          <button id="quitar-plataformas" type="button">Quitar todas</button>
+    <section id="panel-usuario" class="tarjeta panel-usuario" aria-labelledby="bienvenida" hidden>
+      <div class="panel-usuario-cabecera">
+        <div>
+          <p class="etiqueta">Tu cuenta</p>
+          <h2 id="bienvenida" tabindex="-1"></h2>
         </div>
-        <p id="mensaje-plataformas" role="status" aria-live="polite"></p>
-      </form>
+        <button id="cerrar-sesion" class="boton boton-secundario" type="button">Cerrar sesión</button>
+      </div>
+      <p id="correo-usuario" class="dato-usuario"></p>
+      <p id="rol-usuario" class="dato-usuario"></p>
+      <button id="eliminar-cuenta" class="boton boton-peligro" type="button">Eliminar mi cuenta</button>
     </section>
 
-    <section id="panel-catalogo" aria-labelledby="titulo-catalogo" hidden>
-      <h2 id="titulo-catalogo">Buscar películas</h2>
+    <section id="panel-catalogo" class="panel-catalogo" aria-labelledby="titulo-catalogo" hidden>
+      <div class="cabecera-seccion">
+        <div>
+          <p class="etiqueta">Catálogo</p>
+          <h2 id="titulo-catalogo">Buscar películas</h2>
+        </div>
+        <p class="nota-seccion">Busca por título y afina el año si lo recuerdas.</p>
+      </div>
 
-      <form id="form-busqueda" novalidate>
+      <form id="form-busqueda" class="buscador" novalidate>
         <div class="campos-busqueda">
-          <div>
+          <div class="campo">
             <label for="busqueda-titulo">Título</label>
             <input
               id="busqueda-titulo"
@@ -433,7 +189,7 @@
             >
           </div>
 
-          <div>
+          <div class="campo">
             <label for="busqueda-anio">Año (opcional)</label>
             <input
               id="busqueda-anio"
@@ -446,24 +202,26 @@
             >
           </div>
 
-          <div>
-            <button id="boton-buscar" type="submit">Buscar</button>
+          <div class="campo campo-boton">
+            <button id="boton-buscar" class="boton boton-primario" type="submit">Buscar</button>
           </div>
         </div>
 
-        <p id="ayuda-busqueda" class="ayuda-busqueda">
+        <p id="ayuda-busqueda" class="ayuda">
           Escribe un título. El año es opcional y debe tener cuatro dígitos.
         </p>
       </form>
 
-      <p id="estado-catalogo" role="status" aria-live="polite" tabindex="-1"></p>
+      <p id="estado-catalogo" class="estado-seccion" role="status" aria-live="polite" tabindex="-1"></p>
       <p id="error-catalogo" class="error" role="alert" tabindex="-1" hidden></p>
-      <button id="reintentar-catalogo" type="button" hidden>
+      <button id="reintentar-catalogo" class="boton boton-secundario" type="button" hidden>
         Reintentar búsqueda
       </button>
 
       <div id="resultados" hidden>
-        <p id="resumen-resultados" tabindex="-1"></p>
+        <div class="resultados-cabecera">
+          <p id="resumen-resultados" tabindex="-1"></p>
+        </div>
         <ul
           id="lista-peliculas"
           class="tarjetas-peliculas"
@@ -471,9 +229,9 @@
         ></ul>
 
         <nav id="paginacion" aria-label="Paginación de resultados" hidden>
-          <button id="pagina-anterior" type="button">Anterior</button>
+          <button id="pagina-anterior" class="boton boton-secundario" type="button">Anterior</button>
           <span id="pagina-actual" aria-live="polite"></span>
-          <button id="pagina-siguiente" type="button">Siguiente</button>
+          <button id="pagina-siguiente" class="boton boton-secundario" type="button">Siguiente</button>
         </nav>
       </div>
 
@@ -485,10 +243,10 @@
         tabindex="-1"
         hidden
       >
-        <button id="volver-resultados" type="button">Volver a resultados</button>
-        <p id="estado-detalle" role="status" aria-live="polite"></p>
+        <button id="volver-resultados" class="boton boton-secundario" type="button">Volver a resultados</button>
+        <p id="estado-detalle" class="estado-seccion" role="status" aria-live="polite"></p>
         <p id="error-detalle" class="error" role="alert" tabindex="-1" hidden></p>
-        <button id="reintentar-detalle" type="button" hidden>
+        <button id="reintentar-detalle" class="boton boton-secundario" type="button" hidden>
           Reintentar ficha
         </button>
 
@@ -510,7 +268,7 @@
           hidden
         >
           <h4 id="titulo-disponibilidad">Disponibilidad en España</h4>
-          <p id="estado-disponibilidad" role="status" aria-live="polite"></p>
+          <p id="estado-disponibilidad" class="estado-seccion" role="status" aria-live="polite"></p>
           <p
             id="error-disponibilidad"
             class="error"
@@ -518,11 +276,11 @@
             tabindex="-1"
             hidden
           ></p>
-          <button id="reintentar-disponibilidad" type="button" hidden>
+          <button id="reintentar-disponibilidad" class="boton boton-secundario" type="button" hidden>
             Reintentar disponibilidad
           </button>
           <div id="contenido-disponibilidad" hidden>
-            <p id="mensaje-disponibilidad" role="status" aria-live="polite"></p>
+            <p id="mensaje-disponibilidad" class="mensaje-local" role="status" aria-live="polite"></p>
             <div id="grupos-disponibilidad" class="grupos-disponibilidad"></div>
             <p id="fuente-disponibilidad" class="atribucion-disponibilidad"></p>
             <p id="fecha-disponibilidad" class="fecha-disponibilidad"></p>
@@ -565,10 +323,39 @@
       </footer>
     </section>
 
-    <section id="panel-admin" aria-labelledby="titulo-admin" hidden>
+    <section id="panel-plataformas" class="tarjeta panel-plataformas" aria-labelledby="titulo-plataformas" hidden>
+      <p class="etiqueta">Preferencias</p>
+      <h2 id="titulo-plataformas">Mis plataformas</h2>
+      <p>Disponibilidad para España. Selecciona tus plataformas y guarda los cambios.</p>
+      <p class="nota-seccion">Las suscripciones, canales y paquetes adicionales se eligen por separado.</p>
+      <form id="form-plataformas">
+        <div class="campo">
+          <label for="filtro-plataformas">Filtrar plataformas</label>
+          <input id="filtro-plataformas" type="search" maxlength="200" autocomplete="off" aria-controls="lista-plataformas">
+        </div>
+        <p id="error-preferencias" class="error" role="alert" hidden></p>
+        <button id="reintentar-preferencias" class="boton boton-secundario" type="button" hidden>Reintentar preferencias</button>
+        <p id="error-plataformas" class="error" role="alert" hidden></p>
+        <button id="reintentar-plataformas" class="boton boton-secundario" type="button" hidden>Reintentar catálogo de plataformas</button>
+        <fieldset>
+          <legend>Plataformas de streaming</legend>
+          <p id="cantidad-plataformas" class="ayuda" role="status"></p>
+          <div id="lista-plataformas" class="lista-plataformas"></div>
+        </fieldset>
+        <p id="resumen-plataformas" class="mensaje-local" role="status" aria-live="polite"></p>
+        <div class="acciones-plataformas">
+          <button id="guardar-plataformas" class="boton boton-primario" type="submit">Guardar plataformas</button>
+          <button id="quitar-plataformas" class="boton boton-secundario" type="button">Quitar todas</button>
+        </div>
+        <p id="mensaje-plataformas" class="mensaje-local" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <section id="panel-admin" class="tarjeta panel-admin" aria-labelledby="titulo-admin" hidden>
+      <p class="etiqueta">Administración</p>
       <h2 id="titulo-admin">Administración de usuarios</h2>
-      <button id="actualizar-usuarios" type="button">Actualizar listado</button>
-      <p id="estado-listado" role="status" aria-live="polite"></p>
+      <button id="actualizar-usuarios" class="boton boton-secundario" type="button">Actualizar listado</button>
+      <p id="estado-listado" class="estado-seccion" role="status" aria-live="polite"></p>
       <div class="tabla-usuarios">
         <table>
           <caption>Usuarios no eliminados</caption>

@@ -23,6 +23,14 @@ const archivosPublicos = {
     ruta: new URL("../Cliente/index.html", import.meta.url),
     tipo: "text/html; charset=utf-8"
   },
+  "/estilos.css": {
+    ruta: new URL("../Cliente/estilos.css", import.meta.url),
+    tipo: "text/css; charset=utf-8"
+  },
+  "/google-g.svg": {
+    ruta: new URL("../Cliente/google-g.svg", import.meta.url),
+    tipo: "image/svg+xml"
+  },
   "/gui.js": {
     ruta: new URL("../Cliente/gui.js", import.meta.url),
     tipo: "text/javascript; charset=utf-8"
