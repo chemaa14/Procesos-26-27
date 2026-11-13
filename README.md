@@ -811,7 +811,7 @@ La [guía de pruebas del catálogo](docs/sprint2/S2-01-T06-pruebas-catalogo.md) 
 
 ## Sprint 2: definición de plataformas (S2-02-T01)
 
-La [definición de disponibilidad y región](docs/sprint2/S2-02-T01-disponibilidad-region.md) fija España, la coincidencia por proveedor y la separación entre suscripción, alquiler y compra. La persistencia y la API se incorporan en T02 y T03; el selector visual queda pendiente de T04.
+La [definición de disponibilidad y región](docs/sprint2/S2-02-T01-disponibilidad-region.md) fija España, la coincidencia por proveedor y la separación entre suscripción, alquiler y compra. La persistencia y la API se incorporan en T02 y T03; el selector visual se incorpora en T04.
 
 ## Sprint 2: persistencia de plataformas (S2-02-T02)
 
@@ -819,4 +819,16 @@ La [guía de persistencia](docs/sprint2/S2-02-T02-persistencia-plataformas.md) d
 
 ## Sprint 2: API de preferencias (S2-02-T03)
 
-La [guía de la API de preferencias](docs/sprint2/S2-02-T03-api-preferencias.md) describe GET /api/plataformas y GET/PUT /api/preferencias/plataformas, sus permisos y los pasos para probar en local. Requiere la migración 006; no añade variables. El selector visual se implementará en T04.
+La [guía de la API de preferencias](docs/sprint2/S2-02-T03-api-preferencias.md) describe GET /api/plataformas y GET/PUT /api/preferencias/plataformas, sus permisos y los pasos para probar en local. Requiere la migración 006; no añade variables. El selector visual se incorpora en T04.
+
+## Sprint 2: selector de plataformas (S2-02-T04)
+
+Mis plataformas permite filtrar, guardar, quitar y recuperar la selección de cada cuenta. La [guía del selector](docs/sprint2/S2-02-T04-selector-plataformas.md) recoge su uso y validación. No añade configuración ni migraciones; la disponibilidad de películas se incorpora en T05.
+
+## Sprint 2: disponibilidad de películas (S2-02-T05)
+
+La [guía de disponibilidad](docs/sprint2/S2-02-T05-disponibilidad-pelicula.md) describe `GET /api/peliculas/:id/disponibilidad`, la consulta a TMDB `watch/providers`, el cruce con la selección de España y la presentación en la ficha. Reutiliza la sesión, las preferencias y el adaptador TMDB existentes; no añade variables, dependencias, migraciones ni caché.
+
+## Sprint 2: pruebas de preferencias y permisos (S2-02-T06)
+
+La [guía de pruebas de preferencias](docs/sprint2/S2-02-T06-pruebas-preferencias.md) recoge la cobertura de persistencia entre sesiones, aislamiento entre cuentas, selección vacía, permisos y recuperación ante fallos. Incluye el recorrido de disponibilidad con PostgreSQL real en `npm run test:postgres`, sin modificar el código de producción ni la configuración.

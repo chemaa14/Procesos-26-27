@@ -3,6 +3,7 @@ import { PreferenciasPlataformas } from "./preferencias-plataformas.js";
 import { ErrorPlataformas, validarSeleccionPlataformas } from "./plataformas-tmdb.js";
 import { ErrorBusquedaPeliculas } from "./busqueda-peliculas.js";
 import { ErrorDetallePelicula } from "./detalle-pelicula.js";
+import { ErrorDisponibilidadPelicula } from "./disponibilidad-pelicula.js";
 import { ErrorCatalogoTMDB } from "./catalogo-tmdb.js";
 import { ErrorConfirmacion } from "./confirmaciones.js";
 import { ErrorOAuth, crearValorOAuth } from "./google-oauth.js";
@@ -28,6 +29,18 @@ const archivosPublicos = {
   },
   "/rest.js": {
     ruta: new URL("../Cliente/rest.js", import.meta.url),
+    tipo: "text/javascript; charset=utf-8"
+  },
+  "/preferencias-estado.js": {
+    ruta: new URL("../Cliente/preferencias-estado.js", import.meta.url),
+    tipo: "text/javascript; charset=utf-8"
+  },
+"/selector-plataformas.js": {
+    ruta: new URL("../Cliente/selector-plataformas.js", import.meta.url),
+    tipo: "text/javascript; charset=utf-8"
+  },
+  "/disponibilidad.js": {
+    ruta: new URL("../Cliente/disponibilidad.js", import.meta.url),
     tipo: "text/javascript; charset=utf-8"
   },
   "/catalogo.js": {
@@ -217,8 +230,9 @@ export function crearAplicacion({
   intentosOAuth = new IntentosOAuth(),
   sesiones = new Sesiones({ duracionMs: DURACION_SESION_SEGUNDOS * 1000 }),
   registrarActividad = crearRegistroActividad(),
-  catalogo = null,
+catalogo = null,
   detalle = null,
+  disponibilidad = null,
   plataformas = null,
   preferencias = new PreferenciasPlataformas(datos)
 } = {})
@@ -468,6 +482,35 @@ async function exigirUsuario(peticion) {
           return responderJSON(respuesta, 200, await preferencias.guardar(usuario.id, ids));
         }
 
+        const rutaDisponibilidad = ruta.match(
+          /^\/api\/peliculas\/([^/]+)\/disponibilidad$/
+        );
+
+        if (rutaDisponibilidad) {
+          if (metodo !== "GET") {
+            return metodoNoPermitido(respuesta, "GET");
+          }
+
+          const usuario = await exigirUsuario(peticion);
+          actividad.usuarioId = usuario.id;
+
+          if (!disponibilidad) {
+            actividad.codigo = "CATALOGO_NO_CONFIGURADO";
+            return responderJSON(respuesta, 503, {
+              error: "El catálogo no está disponible.",
+              codigo: "CATALOGO_NO_CONFIGURADO"
+            });
+          }
+
+          if (url.search) throw new ErrorDisponibilidadPelicula("ENTRADA_INVALIDA");
+
+          return responderJSON(
+            respuesta,
+            200,
+            await disponibilidad.obtener(rutaDisponibilidad[1], usuario.id)
+          );
+        }
+
         const rutaDetalle = ruta.match(/^\/api\/peliculas\/([^/]+)$/);
 
         if (ruta === "/api/peliculas" || rutaDetalle) {
@@ -692,6 +735,25 @@ async function exigirUsuario(peticion) {
           ENTRADA_INVALIDA: "DETALLE_INVALIDO",
           PELICULA_NO_ENCONTRADA: "PELICULA_NO_ENCONTRADA",
           RESPUESTA_PROVEEDOR_INVALIDA: "DETALLE_RESPUESTA_INVALIDA"
+        };
+        const estado = estados[error.codigo] ?? 500;
+
+        return responderJSON(respuesta, estado, {
+          error: estado === 500 ? "Error interno del servidor." : error.message,
+          codigo: codigos[error.codigo] ?? "ERROR_INTERNO"
+        });
+      }
+
+      if (error instanceof ErrorDisponibilidadPelicula) {
+        const estados = {
+          ENTRADA_INVALIDA: 400,
+          PELICULA_NO_ENCONTRADA: 404,
+          RESPUESTA_PROVEEDOR_INVALIDA: 502
+        };
+        const codigos = {
+          ENTRADA_INVALIDA: "DISPONIBILIDAD_INVALIDA",
+          PELICULA_NO_ENCONTRADA: "PELICULA_NO_ENCONTRADA",
+          RESPUESTA_PROVEEDOR_INVALIDA: "DISPONIBILIDAD_RESPUESTA_INVALIDA"
         };
         const estado = estados[error.codigo] ?? 500;
 

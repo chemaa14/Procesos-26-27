@@ -2,6 +2,7 @@ import { crearServicioPlataformas } from "./plataformas-tmdb.js";
 import { PreferenciasPlataformasPostgres } from "./preferencias-plataformas-postgres.js";
 import { crearServicioBusqueda } from "./busqueda-peliculas.js";
 import { crearServicioDetalle } from "./detalle-pelicula.js";
+import { crearServicioDisponibilidad } from "./disponibilidad-pelicula.js";
 import { crearCatalogoTMDB } from "./catalogo-tmdb.js";
 import { crearCorreo } from "./correo.js";
 import { Confirmaciones } from "./confirmaciones.js";
@@ -40,9 +41,12 @@ try {
   const catalogo = adaptadorTmdb ? crearServicioBusqueda(adaptadorTmdb) : null;
   const detalle = adaptadorTmdb ? crearServicioDetalle(adaptadorTmdb) : null;
   const plataformas = adaptadorTmdb ? crearServicioPlataformas(adaptadorTmdb) : null;
-  const preferencias = new PreferenciasPlataformasPostgres(pool);
+const preferencias = new PreferenciasPlataformasPostgres(pool);
+  const disponibilidad = adaptadorTmdb
+    ? crearServicioDisponibilidad(adaptadorTmdb, preferencias)
+    : null;
   const aplicacion = crearAplicacion({ datos, confirmaciones, registrarActividad, google: crearGoogleOAuth(),
-    sesiones: new SesionesPostgres(pool), intentosOAuth: new IntentosOAuthPostgres(pool), catalogo, detalle, plataformas, preferencias });
+    sesiones: new SesionesPostgres(pool), intentosOAuth: new IntentosOAuthPostgres(pool), catalogo, detalle, disponibilidad, plataformas, preferencias });
   servidor = aplicacion.servidor;
 
   const puerto = Number(process.env.PORT || 3000);
