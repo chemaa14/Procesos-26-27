@@ -60,6 +60,14 @@
       outline-offset: 3px;
     }
 
+    #panel-plataformas fieldset { min-width: 0; margin: 18px 0; border: 1px solid #ddd; border-radius: 6px; }
+    .lista-plataformas { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 8px; max-height: 320px; overflow-y: auto; padding: 4px; }
+    .opcion-plataforma { display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px; font-weight: 400; border: 1px solid #ddd; border-radius: 6px; overflow-wrap: anywhere; cursor: pointer; }
+    .opcion-plataforma input { flex: 0 0 auto; width: 20px; height: 20px; margin: 2px 0 0; padding: 0; }
+    .opcion-plataforma small { color: #555; }
+    .acciones-plataformas { display: flex; flex-wrap: wrap; gap: 10px; }
+    .acciones-plataformas button { margin-top: 0; }
+
     .tabla-usuarios { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }
     th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
@@ -200,6 +208,37 @@
     .detalle-sinopsis {
       line-height: 1.6;
       white-space: pre-line;
+    }
+
+    .disponibilidad-pelicula {
+      margin-top: 20px;
+      padding-top: 16px;
+      border-top: 1px solid #ddd;
+    }
+
+    .disponibilidad-pelicula h4 {
+      margin-top: 0;
+    }
+
+    .grupos-disponibilidad {
+      display: grid;
+      gap: 12px;
+    }
+
+    .grupo-disponibilidad h5 {
+      margin: 0 0 4px;
+    }
+
+    .grupo-disponibilidad ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .atribucion-disponibilidad,
+    .fecha-disponibilidad {
+      margin: 8px 0 0;
+      color: #555;
+      font-size: 0.85rem;
     }
 
     .atribucion-tmdb {
@@ -351,6 +390,31 @@
       <button id="eliminar-cuenta" type="button"> Eliminar mi cuenta</button>
     </section>
 
+    <section id="panel-plataformas" aria-labelledby="titulo-plataformas" hidden>
+      <h2 id="titulo-plataformas">Mis plataformas</h2>
+      <p>Disponibilidad para España. Selecciona tus plataformas y guarda los cambios.</p>
+      <p>Las suscripciones, canales y paquetes adicionales se eligen por separado.</p>
+      <form id="form-plataformas">
+        <label for="filtro-plataformas">Filtrar plataformas</label>
+        <input id="filtro-plataformas" type="search" maxlength="200" autocomplete="off" aria-controls="lista-plataformas">
+        <p id="error-preferencias" class="error" role="alert" hidden></p>
+        <button id="reintentar-preferencias" type="button" hidden>Reintentar preferencias</button>
+        <p id="error-plataformas" class="error" role="alert" hidden></p>
+        <button id="reintentar-plataformas" type="button" hidden>Reintentar catálogo de plataformas</button>
+        <fieldset>
+          <legend>Plataformas de streaming</legend>
+          <p id="cantidad-plataformas" role="status"></p>
+          <div id="lista-plataformas" class="lista-plataformas"></div>
+        </fieldset>
+        <p id="resumen-plataformas" role="status" aria-live="polite"></p>
+        <div class="acciones-plataformas">
+          <button id="guardar-plataformas" type="submit">Guardar plataformas</button>
+          <button id="quitar-plataformas" type="button">Quitar todas</button>
+        </div>
+        <p id="mensaje-plataformas" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
     <section id="panel-catalogo" aria-labelledby="titulo-catalogo" hidden>
       <h2 id="titulo-catalogo">Buscar películas</h2>
 
@@ -438,6 +502,39 @@
             <p id="detalle-sinopsis" class="detalle-sinopsis"></p>
           </div>
         </article>
+
+        <section
+          id="disponibilidad-pelicula"
+          class="disponibilidad-pelicula"
+          aria-labelledby="titulo-disponibilidad"
+          hidden
+        >
+          <h4 id="titulo-disponibilidad">Disponibilidad en España</h4>
+          <p id="estado-disponibilidad" role="status" aria-live="polite"></p>
+          <p
+            id="error-disponibilidad"
+            class="error"
+            role="alert"
+            tabindex="-1"
+            hidden
+          ></p>
+          <button id="reintentar-disponibilidad" type="button" hidden>
+            Reintentar disponibilidad
+          </button>
+          <div id="contenido-disponibilidad" hidden>
+            <p id="mensaje-disponibilidad" role="status" aria-live="polite"></p>
+            <div id="grupos-disponibilidad" class="grupos-disponibilidad"></div>
+            <p id="fuente-disponibilidad" class="atribucion-disponibilidad"></p>
+            <p id="fecha-disponibilidad" class="fecha-disponibilidad"></p>
+            <a
+              id="enlace-disponibilidad"
+              href="https://www.themoviedb.org/"
+              target="_blank"
+              rel="noopener noreferrer"
+              hidden
+            >Consultar opciones en TMDB</a>
+          </div>
+        </section>
       </div>
 
       <footer class="atribucion-tmdb">

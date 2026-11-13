@@ -163,3 +163,21 @@ export function buscarPeliculas({ titulo, anio, pagina } = {}) {
 export function obtenerDetallePelicula(id) {
   return realizarPeticion(`/api/peliculas/${encodeURIComponent(id)}`);
 }
+
+export function obtenerDisponibilidadPelicula(id) {
+  return realizarPeticion(
+    `/api/peliculas/${encodeURIComponent(id)}/disponibilidad`
+  );
+}
+
+export function obtenerPlataformas() {
+  return realizarPeticion("/api/plataformas");
+}
+export function obtenerPreferenciasPlataformas() {
+  return realizarPeticion("/api/preferencias/plataformas");
+}
+export function guardarPreferenciasPlataformas(plataformas) {
+  return realizarPeticion("/api/preferencias/plataformas", {
+    metodo: "PUT", datos: { plataformas }
+  });
+}

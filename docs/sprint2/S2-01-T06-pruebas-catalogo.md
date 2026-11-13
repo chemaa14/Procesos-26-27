@@ -101,3 +101,7 @@ T06 deja verificado el catálogo en el alcance local descrito. La comprobación
 pública y la regresión con PostgreSQL permanecen pendientes del cierre de la
 entrega. No se declara completado el Hito 1: quedan los PBI de preferencias.
 No se inicia la siguiente tarea sin indicación del usuario.
+
+## Validación pública comunicada tras la PR #19
+
+El 12 de noviembre de 2026, el usuario confirmó la integración de la PR #19 y el despliegue correcto. Informó haber probado acceso con Google, búsqueda de una película, consulta de ficha, cierre de sesión y repetición del recorrido. Este registro procede de su comprobación, no de una inspección remota del agente. No acredita pruebas públicas adicionales de paginación, fallos controlados ni ejecución de la batería PostgreSQL. El catálogo S2-01 cuenta con esta validación funcional pública; el resto del Hito 1 sigue su backlog.

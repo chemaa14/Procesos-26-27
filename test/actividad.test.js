@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { crearRegistroActividad, rutaParaRegistro } from "../Servidor/actividad.js";
 import { crearAplicacion } from "../Servidor/api.js";
@@ -10,6 +10,42 @@ import { DatosUsuarios } from "../Servidor/datos.js";
 
 const PASSWORD = "Contraseña ficticia de logs que nunca debe salir";
 const MARCADOR = "SECRETO_QUE_NO_DEBE_APARECER";
+const RUTA_INICIO_POSTGRES = fileURLToPath(new URL("../Servidor/inicio-postgres.js", import.meta.url));
+
+function ejecutarInicioPostgres(env, { timeoutMs = 30000, maxSalida = 65536 } = {}) {
+  return new Promise((resolve, reject) => {
+    const hijo = spawn(process.execPath, [RUTA_INICIO_POSTGRES],
+      { env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    let stdout = "";
+    let stderr = "";
+    let motivo = null;
+    let temporizador;
+    const detener = razon => {
+      if (motivo) return;
+      motivo = razon;
+      hijo.kill("SIGKILL");
+    };
+    hijo.stdout.setEncoding("utf8");
+    hijo.stderr.setEncoding("utf8");
+    hijo.stdout.on("data", trozo => {
+      stdout += trozo;
+      if (stdout.length + stderr.length > maxSalida) detener("limite_salida");
+    });
+    hijo.stderr.on("data", trozo => {
+      stderr += trozo;
+      if (stdout.length + stderr.length > maxSalida) detener("limite_salida");
+    });
+    hijo.on("error", error => {
+      clearTimeout(temporizador);
+      reject(new Error(`No se pudo ejecutar inicio-postgres (codigo=${error?.code ?? "DESCONOCIDO"}).`));
+    });
+    hijo.on("close", (codigo, senal) => {
+      clearTimeout(temporizador);
+      resolve({ status: codigo, signal: senal, stdout, stderr, motivo });
+    });
+    temporizador = setTimeout(() => detener("timeout"), timeoutMs);
+  });
+}
 
 async function conServidor(comprobar, opciones = {}) {
   const lineas = [];
@@ -152,11 +188,11 @@ test("un destino de logs que falla no rompe la API", async () => {
   assert.doesNotThrow(() => crearRegistroActividad({ escribir: registrarActividad })("error_interno"));
 });
 
-test("el fallo de configuración al arrancar produce JSON seguro y salida de error", () => {
+test("el fallo de configuración al arrancar produce JSON seguro y salida de error", async () => {
   const env = { ...process.env, DB_HOST: "", DB_PASSWORD: MARCADOR };
-  const r = spawnSync(process.execPath, [fileURLToPath(new URL("../Servidor/inicio-postgres.js", import.meta.url))],
-    { env, encoding: "utf8", timeout: 10000 });
-  assert.equal(r.status, 1);
+  const r = await ejecutarInicioPostgres(env);
+  assert.equal(r.status, 1,
+    `inicio-postgres no terminó con código 1 (status=${r.status}, signal=${r.signal}, motivo=${r.motivo ?? "ninguno"})`);
   const registro = JSON.parse(r.stdout.trim());
   assert.equal(registro.evento, "error_inicio");
   assert.equal(registro.codigo, "CONFIGURACION_INVALIDA");

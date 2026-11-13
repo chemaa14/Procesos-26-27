@@ -1,3 +1,11 @@
+import { crearSelectorPlataformas } from "./selector-plataformas.js";
+import {
+  TEXTO_DISPONIBILIDAD_CARGANDO,
+  TEXTO_DISPONIBILIDAD_FUENTE,
+  crearEstadoDisponibilidad,
+  seccionesDisponibilidad,
+  textoConsultadoEn
+} from "./disponibilidad.js";
 import {
   confirmarCorreo,
   reenviarConfirmacion,
@@ -11,7 +19,8 @@ import {
   listarUsuarios,
   eliminarUsuario,
   buscarPeliculas,
-  obtenerDetallePelicula
+  obtenerDetallePelicula,
+  obtenerDisponibilidadPelicula
 } from "./rest.js";
 import {
   TEXTO_ANIO_AUSENTE,
@@ -83,15 +92,37 @@ const estadoDetalle = document.getElementById("estado-detalle");
 const errorDetalle = document.getElementById("error-detalle");
 const botonReintentarDetalle = document.getElementById("reintentar-detalle");
 const botonVolver = document.getElementById("volver-resultados");
+const disponibilidadPelicula = document.getElementById("disponibilidad-pelicula");
+const estadoDisponibilidad = document.getElementById("estado-disponibilidad");
+const errorDisponibilidad = document.getElementById("error-disponibilidad");
+const botonReintentarDisponibilidad = document.getElementById("reintentar-disponibilidad");
+const contenidoDisponibilidad = document.getElementById("contenido-disponibilidad");
+const mensajeDisponibilidad = document.getElementById("mensaje-disponibilidad");
+const gruposDisponibilidad = document.getElementById("grupos-disponibilidad");
+const fuenteDisponibilidad = document.getElementById("fuente-disponibilidad");
+const fechaDisponibilidad = document.getElementById("fecha-disponibilidad");
+const enlaceDisponibilidad = document.getElementById("enlace-disponibilidad");
 
 const estadoCatalogoUI = crearEstadoCatalogo();
+const estadoDisponibilidadUI = crearEstadoDisponibilidad();
 let usuarioActual = null;
 let ocupado = false;
 let cargandoBusqueda = false;
 let cargandoDetalle = false;
+let cargandoDisponibilidad = false;
 let reintentoBusqueda = null;
 let detallePendiente = null;
+let disponibilidadPendiente = null;
 let focoDetalle = null;
+const selectorPlataformas = crearSelectorPlataformas(document.getElementById("panel-plataformas"), {
+  estaOcupado: () => ocupado,
+  alCaducar: () => volverAlAccesoPorSesion(),
+  alGuardar: () => {
+    if (estadoCatalogoUI.detalle && !detalleContenido.hidden) {
+      void cargarDisponibilidad(estadoCatalogoUI.detalle.id);
+    }
+  }
+});
 
 function mostrarMensaje(texto, esError = false) {
   mensaje.textContent = texto;
@@ -105,6 +136,7 @@ function cambiarOcupado(valor) {
     elemento.disabled = valor;
   });
 
+  selectorPlataformas.actualizarControles();
   formRegistro.setAttribute("aria-busy", String(valor));
   formLogin.setAttribute("aria-busy", String(valor));
   actualizarControlesCatalogo();
@@ -114,6 +146,7 @@ function mostrarUsuario(usuario) {
   const cambiaUsuario = (usuario?.id ?? null) !== (usuarioActual?.id ?? null);
 
   usuarioActual = usuario;
+  selectorPlataformas.cambiarUsuario(usuario);
 
   if (cambiaUsuario || !usuario) {
     limpiarCatalogoUI();
@@ -189,9 +222,11 @@ function actualizarControlesCatalogo() {
   botonVolver.disabled = !habilitado;
   botonReintentarCatalogo.disabled = !habilitado || cargandoBusqueda;
   botonReintentarDetalle.disabled = !habilitado || cargandoDetalle;
+  botonReintentarDisponibilidad.disabled = !habilitado || cargandoDisponibilidad;
 
   formBusqueda.setAttribute("aria-busy", String(cargandoBusqueda));
   detallePelicula.setAttribute("aria-busy", String(cargandoDetalle));
+  disponibilidadPelicula.setAttribute("aria-busy", String(cargandoDisponibilidad));
 
   if (!estadoCatalogoUI.busqueda) {
     paginacion.hidden = true;
@@ -220,6 +255,147 @@ function mostrarErrorDetalle(texto) {
   errorDetalle.hidden = false;
 }
 
+function ocultarErrorDisponibilidad() {
+  errorDisponibilidad.textContent = "";
+  errorDisponibilidad.hidden = true;
+  botonReintentarDisponibilidad.hidden = true;
+}
+
+function mostrarErrorDisponibilidad(texto) {
+  errorDisponibilidad.textContent = texto;
+  errorDisponibilidad.hidden = false;
+}
+
+function limpiarDisponibilidadUI() {
+  estadoDisponibilidadUI.limpiar();
+  cargandoDisponibilidad = false;
+  disponibilidadPendiente = null;
+
+  disponibilidadPelicula.hidden = true;
+  estadoDisponibilidad.textContent = "";
+  contenidoDisponibilidad.hidden = true;
+  mensajeDisponibilidad.textContent = "";
+  mensajeDisponibilidad.hidden = true;
+  gruposDisponibilidad.replaceChildren();
+  fuenteDisponibilidad.textContent = "";
+  fechaDisponibilidad.textContent = "";
+  fechaDisponibilidad.removeAttribute("datetime");
+  enlaceDisponibilidad.hidden = true;
+  enlaceDisponibilidad.removeAttribute("href");
+  ocultarErrorDisponibilidad();
+}
+
+function crearGrupoDisponibilidad(seccion) {
+  const grupo = document.createElement("div");
+  grupo.className = "grupo-disponibilidad";
+  const titulo = document.createElement("h5");
+  titulo.textContent = seccion.titulo;
+  const lista = document.createElement("ul");
+
+  for (const proveedor of seccion.proveedores) {
+    const elemento = document.createElement("li");
+    elemento.textContent = proveedor.nombre;
+    lista.append(elemento);
+  }
+
+  grupo.append(titulo, lista);
+  return grupo;
+}
+
+function renderizarDisponibilidad(disponibilidad) {
+  gruposDisponibilidad.replaceChildren();
+
+  for (const seccion of seccionesDisponibilidad(disponibilidad)) {
+    if (seccion.proveedores.length > 0) {
+      gruposDisponibilidad.append(crearGrupoDisponibilidad(seccion));
+    }
+  }
+
+  mensajeDisponibilidad.textContent = disponibilidad.mensaje ?? "";
+  mensajeDisponibilidad.hidden = !disponibilidad.mensaje;
+
+  const fecha = textoConsultadoEn(disponibilidad.consultadoEn);
+  fechaDisponibilidad.textContent = fecha
+    ? `Consultado en CineMatch: ${fecha}.`
+    : "";
+  if (fecha) {
+    fechaDisponibilidad.dateTime = disponibilidad.consultadoEn;
+  } else {
+    fechaDisponibilidad.removeAttribute("datetime");
+  }
+
+  fuenteDisponibilidad.textContent = TEXTO_DISPONIBILIDAD_FUENTE;
+  enlaceDisponibilidad.hidden = !disponibilidad.enlace;
+  if (disponibilidad.enlace) {
+    enlaceDisponibilidad.href = disponibilidad.enlace;
+  } else {
+    enlaceDisponibilidad.removeAttribute("href");
+  }
+
+  contenidoDisponibilidad.hidden = false;
+  disponibilidadPelicula.hidden = false;
+  estadoDisponibilidad.textContent = "";
+  ocultarErrorDisponibilidad();
+  actualizarControlesCatalogo();
+}
+
+async function cargarDisponibilidad(id) {
+  if (!usuarioActual || ocupado) return;
+
+  const solicitud = estadoDisponibilidadUI.iniciar(id);
+
+  disponibilidadPendiente = { id };
+  cargandoDisponibilidad = true;
+  disponibilidadPelicula.hidden = false;
+  contenidoDisponibilidad.hidden = true;
+  mensajeDisponibilidad.textContent = "";
+  mensajeDisponibilidad.hidden = true;
+  gruposDisponibilidad.replaceChildren();
+  fuenteDisponibilidad.textContent = "";
+  fechaDisponibilidad.textContent = "";
+  fechaDisponibilidad.removeAttribute("datetime");
+  enlaceDisponibilidad.hidden = true;
+  enlaceDisponibilidad.removeAttribute("href");
+  estadoDisponibilidad.textContent = TEXTO_DISPONIBILIDAD_CARGANDO;
+  ocultarErrorDisponibilidad();
+  actualizarControlesCatalogo();
+
+  try {
+    const datos = await obtenerDisponibilidadPelicula(id);
+
+    if (!estadoDisponibilidadUI.esVigente(solicitud) || !usuarioActual) {
+      return;
+    }
+
+    if (!estadoDisponibilidadUI.confirmar(solicitud, datos)) return;
+
+    disponibilidadPendiente = null;
+    renderizarDisponibilidad(estadoDisponibilidadUI.disponibilidad);
+  } catch (error) {
+    if (!estadoDisponibilidadUI.esVigente(solicitud) || !usuarioActual) {
+      return;
+    }
+
+    if (error?.estado === 401) {
+      volverAlAccesoPorSesion();
+      return;
+    }
+
+    estadoDisponibilidad.textContent = "";
+    mostrarErrorDisponibilidad(
+      error?.message ??
+        "No se pudo consultar la disponibilidad. Puedes reintentar."
+    );
+    botonReintentarDisponibilidad.hidden = false;
+    errorDisponibilidad.focus();
+  } finally {
+    if (estadoDisponibilidadUI.esVigente(solicitud)) {
+      cargandoDisponibilidad = false;
+      actualizarControlesCatalogo();
+    }
+  }
+}
+
 function limpiarCatalogoUI() {
   estadoCatalogoUI.limpiar();
   cargandoBusqueda = false;
@@ -243,6 +419,7 @@ function limpiarCatalogoUI() {
   detalleDuracion.textContent = "";
   detalleGeneros.textContent = "";
   detalleSinopsis.textContent = "";
+  limpiarDisponibilidadUI();
 
   estadoCatalogo.textContent = "";
   estadoDetalle.textContent = "";
@@ -449,6 +626,7 @@ async function cargarDetalle(id) {
   detalleGeneros.textContent = "";
   detalleSinopsis.textContent = "";
   estadoDetalle.textContent = "Cargando ficha...";
+  limpiarDisponibilidadUI();
   ocultarErrorDetalle();
   actualizarControlesCatalogo();
 
@@ -463,6 +641,7 @@ async function cargarDetalle(id) {
 
     renderizarDetalle(ficha);
     detalleTitulo.focus();
+    void cargarDisponibilidad(ficha.id);
   } catch (error) {
     if (!estadoCatalogoUI.esVigenteDetalle(solicitud) || !usuarioActual) {
       return;
@@ -516,6 +695,7 @@ function cerrarDetalle({ restaurarFoco = true } = {}) {
   detalleGeneros.textContent = "";
   detalleSinopsis.textContent = "";
   estadoDetalle.textContent = "";
+  limpiarDisponibilidadUI();
   ocultarErrorDetalle();
 
   const busqueda = estadoCatalogoUI.busqueda;
@@ -587,6 +767,11 @@ botonReintentarCatalogo.addEventListener("click", () => {
 botonReintentarDetalle.addEventListener("click", () => {
   if (ocupado || cargandoDetalle || !detallePendiente) return;
   cargarDetalle(detallePendiente.id);
+});
+
+botonReintentarDisponibilidad.addEventListener("click", () => {
+  if (ocupado || cargandoDisponibilidad || !disponibilidadPendiente) return;
+  cargarDisponibilidad(disponibilidadPendiente.id);
 });
 
 botonVolver.addEventListener("click", () => cerrarDetalle());
