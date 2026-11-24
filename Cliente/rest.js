@@ -192,3 +192,26 @@ export function guardarPreferenciasPlataformas(plataformas) {
     metodo: "PUT", datos: { plataformas }
   });
 }
+
+export function obtenerListasPeliculas() {
+  return realizarPeticion("/api/listas");
+}
+
+export function guardarEnListaPeliculas(peliculaId, datos) {
+  return realizarPeticion(`/api/listas/${encodeURIComponent(peliculaId)}`, {
+    metodo: "PUT",
+    datos
+  });
+}
+
+export function eliminarDeListaPeliculas(peliculaId) {
+  return realizarPeticion(`/api/listas/${encodeURIComponent(peliculaId)}`, {
+    metodo: "DELETE"
+  });
+}
+
+export function comprobarDisponibilidadListas() {
+  return realizarPeticion("/api/listas/comprobar", {
+    metodo: "POST"
+  });
+}

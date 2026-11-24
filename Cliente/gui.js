@@ -7,6 +7,7 @@ import {
   seccionesDisponibilidad,
   textoConsultadoEn
 } from "./disponibilidad.js";
+import { crearControladorListas } from "./listas.js";
 import {
   confirmarCorreo,
   reenviarConfirmacion,
@@ -124,6 +125,21 @@ const gruposDisponibilidad = document.getElementById("grupos-disponibilidad");
 const fuenteDisponibilidad = document.getElementById("fuente-disponibilidad");
 const fechaDisponibilidad = document.getElementById("fecha-disponibilidad");
 const enlaceDisponibilidad = document.getElementById("enlace-disponibilidad");
+const botonQuieroVer = document.getElementById("boton-quiero-ver");
+const botonMarcarVista = document.getElementById("boton-marcar-vista");
+const botonQuitarLista = document.getElementById("boton-quitar-lista");
+const estadoListaDetalle = document.getElementById("estado-lista-detalle");
+
+const panelListas = document.getElementById("panel-listas");
+const botonComprobarListas = document.getElementById("comprobar-listas");
+const alertaListas = document.getElementById("alerta-listas");
+const estadoListas = document.getElementById("estado-listas");
+const contadorQuieroVer = document.getElementById("contador-quiero-ver");
+const contadorVistas = document.getElementById("contador-vistas");
+const vacioQuieroVer = document.getElementById("vacio-quiero-ver");
+const vacioVistas = document.getElementById("vacio-vistas");
+const listaQuieroVer = document.getElementById("lista-quiero-ver");
+const listaVistas = document.getElementById("lista-vistas");
 
 const estadoCatalogoUI = crearEstadoCatalogo();
 const estadoDisponibilidadUI = crearEstadoDisponibilidad();
@@ -138,6 +154,27 @@ let reintentoBusqueda = null;
 let detallePendiente = null;
 let disponibilidadPendiente = null;
 let focoDetalle = null;
+const controladorListas = crearControladorListas({
+  panelListas,
+  botonComprobarListas,
+  alertaListas,
+  estadoListas,
+  contadorQuieroVer,
+  contadorVistas,
+  vacioQuieroVer,
+  vacioVistas,
+  listaQuieroVer,
+  listaVistas,
+  botonQuieroVer,
+  botonMarcarVista,
+  botonQuitarLista,
+  estadoListaDetalle
+}, {
+  estaOcupado: () => ocupado,
+  obtenerDetalleActual: () => estadoCatalogoUI.detalle,
+  abrirDetalle: (pelicula, boton) => abrirDetalle(pelicula, boton),
+  alCaducar: () => volverAlAccesoPorSesion()
+});
 const selectorPlataformas = crearSelectorPlataformas(document.getElementById("panel-plataformas"), {
   estaOcupado: () => ocupado,
   alCaducar: () => volverAlAccesoPorSesion(),
@@ -145,6 +182,7 @@ const selectorPlataformas = crearSelectorPlataformas(document.getElementById("pa
     if (estadoCatalogoUI.detalle && !detalleContenido.hidden) {
       void cargarDisponibilidad(estadoCatalogoUI.detalle.id);
     }
+    void controladorListas.comprobar({ silencioso: true });
   }
 });
 
@@ -161,6 +199,7 @@ function cambiarOcupado(valor) {
   });
 
   selectorPlataformas.actualizarControles();
+  controladorListas.actualizarControles();
   formRegistro.setAttribute("aria-busy", String(valor));
   formLogin.setAttribute("aria-busy", String(valor));
   formRecuperacion.setAttribute("aria-busy", String(valor));
@@ -180,6 +219,7 @@ function mostrarUsuario(usuario) {
 
   panelAdmin.hidden = usuario?.rol !== "administrador";
   panelCatalogo.hidden = !usuario;
+  controladorListas.cambiarUsuario(usuario);
   rolUsuario.textContent = usuario ? `Rol: ${usuario.rol}` : "";
   listaUsuarios.replaceChildren();
   estadoListado.textContent = "";
@@ -516,7 +556,7 @@ async function cargarDisponibilidad(id) {
     estadoDisponibilidad.textContent = "";
     mostrarErrorDisponibilidad(
       error?.message ??
-        "No se pudo consultar la disponibilidad. Puedes reintentar."
+      "No se pudo consultar la disponibilidad. Puedes reintentar."
     );
     botonReintentarDisponibilidad.hidden = false;
     errorDisponibilidad.focus();
@@ -666,6 +706,7 @@ function renderizarDetalle(ficha) {
   detalleContenido.hidden = false;
   estadoDetalle.textContent = "";
   ocultarErrorDetalle();
+  controladorListas.actualizarControles();
   actualizarControlesCatalogo();
 }
 
@@ -832,6 +873,7 @@ function cerrarDetalle({ restaurarFoco = true } = {}) {
 
   const busqueda = estadoCatalogoUI.busqueda;
   resultados.hidden = !busqueda || busqueda.peliculas.length === 0;
+  controladorListas.actualizarControles();
   actualizarControlesCatalogo();
 
   const destino = focoDetalle;
@@ -1058,7 +1100,7 @@ async function cargarUsuarios() {
     for (const usuario of usuarios) {
       const fila = document.createElement("tr");
       for (const valor of [usuario.nombre, usuario.email, usuario.rol,
-        usuario.confirmado && !usuario.eliminado ? "Activo" : "Pendiente"]) {
+      usuario.confirmado && !usuario.eliminado ? "Activo" : "Pendiente"]) {
         const celda = document.createElement("td");
         celda.textContent = valor;
         fila.append(celda);

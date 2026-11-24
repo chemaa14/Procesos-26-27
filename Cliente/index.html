@@ -336,6 +336,12 @@
             <p id="detalle-duracion"></p>
             <p id="detalle-generos"></p>
             <p id="detalle-sinopsis" class="detalle-sinopsis"></p>
+            <div class="acciones-lista-detalle" role="group" aria-label="Guardar en tus listas">
+              <button id="boton-quiero-ver" class="boton boton-primario" type="button">Quiero ver</button>
+              <button id="boton-marcar-vista" class="boton boton-secundario" type="button">Marcar como vista</button>
+              <button id="boton-quitar-lista" class="boton boton-secundario" type="button" hidden>Quitar de mis listas</button>
+            </div>
+            <p id="estado-lista-detalle" class="mensaje-local" role="status" aria-live="polite"></p>
           </div>
         </article>
 
@@ -399,6 +405,32 @@
           <span lang="en">This product uses the TMDB API but is not endorsed or certified by TMDB.</span>
         </p>
       </footer>
+    </section>
+
+    <section id="panel-listas" class="tarjeta panel-listas" aria-labelledby="titulo-listas" hidden>
+      <div class="cabecera-seccion">
+        <div>
+          <p class="etiqueta">Colección personal</p>
+          <h2 id="titulo-listas">Mis listas</h2>
+        </div>
+        <button id="comprobar-listas" class="boton boton-secundario" type="button">
+          Comprobar disponibilidad
+        </button>
+      </div>
+      <p id="alerta-listas" class="alerta-listas" role="status" aria-live="polite" hidden></p>
+      <p id="estado-listas" class="estado-seccion" role="status" aria-live="polite"></p>
+      <div class="listas-columnas">
+        <section aria-labelledby="titulo-quiero-ver">
+          <h3 id="titulo-quiero-ver">Quiero ver (<span id="contador-quiero-ver">0</span>)</h3>
+          <p id="vacio-quiero-ver" class="ayuda">Todavía no has guardado películas pendientes.</p>
+          <ul id="lista-quiero-ver" class="lista-personal"></ul>
+        </section>
+        <section aria-labelledby="titulo-vistas">
+          <h3 id="titulo-vistas">Vistas (<span id="contador-vistas">0</span>)</h3>
+          <p id="vacio-vistas" class="ayuda">Todavía no has marcado películas como vistas.</p>
+          <ul id="lista-vistas" class="lista-personal"></ul>
+        </section>
+      </div>
     </section>
 
     <section id="panel-plataformas" class="tarjeta panel-plataformas" aria-labelledby="titulo-plataformas" hidden>

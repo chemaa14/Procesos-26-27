@@ -1,5 +1,6 @@
 import { crearServicioPlataformas } from "./plataformas-tmdb.js";
 import { PreferenciasPlataformasPostgres } from "./preferencias-plataformas-postgres.js";
+import { ListasPeliculasPostgres } from "./listas-peliculas-postgres.js";
 import { crearServicioBusqueda } from "./busqueda-peliculas.js";
 import { crearServicioDetalle } from "./detalle-pelicula.js";
 import { crearServicioDisponibilidad } from "./disponibilidad-pelicula.js";
@@ -32,6 +33,7 @@ try {
   await pool.query("SELECT token_hash FROM confirmaciones_correo LIMIT 0");
   await pool.query("SELECT id FROM limite_correo LIMIT 0");
   await pool.query("SELECT usuario_id, region, proveedor_id FROM preferencias_plataformas LIMIT 0");
+  await pool.query("SELECT usuario_id, pelicula_id FROM listas_peliculas LIMIT 0");
   await pool.query("SELECT usuario_id, token_hash FROM recuperaciones_password LIMIT 0");
   const correo = crearCorreo();
   const confirmaciones = new Confirmaciones({ repositorio: new ConfirmacionesPostgres(pool),
@@ -49,11 +51,12 @@ try {
   const detalle = adaptadorTmdb ? crearServicioDetalle(adaptadorTmdb) : null;
   const plataformas = adaptadorTmdb ? crearServicioPlataformas(adaptadorTmdb) : null;
 const preferencias = new PreferenciasPlataformasPostgres(pool);
+  const listas = new ListasPeliculasPostgres(pool);
   const disponibilidad = adaptadorTmdb
     ? crearServicioDisponibilidad(adaptadorTmdb, preferencias)
     : null;
   const aplicacion = crearAplicacion({ datos, confirmaciones, recuperaciones, registrarActividad, google: crearGoogleOAuth(),
-    sesiones: new SesionesPostgres(pool), intentosOAuth: new IntentosOAuthPostgres(pool), catalogo, detalle, disponibilidad, plataformas, preferencias });
+    sesiones: new SesionesPostgres(pool), intentosOAuth: new IntentosOAuthPostgres(pool), catalogo, detalle, disponibilidad, plataformas, preferencias, listas });
   servidor = aplicacion.servidor;
 
   const puerto = Number(process.env.PORT || 3000);

@@ -127,7 +127,7 @@ NODE_ENV=development
 ```
 
 Mantener la contraseña existente si la base ya está creada. Después, iniciar
-PostgreSQL y aplicar las seis migraciones reales en orden:
+PostgreSQL y aplicar las siete migraciones reales en orden:
 
 ```powershell
 docker compose up -d --wait
@@ -137,6 +137,7 @@ Get-Content -Raw -Encoding UTF8 .\sql\003-oauth-google.sql | docker compose exec
 Get-Content -Raw -Encoding UTF8 .\sql\004-confirmacion-correo.sql | docker compose exec -T db psql -U cinematch -d cinematch -v ON_ERROR_STOP=1
 Get-Content -Raw -Encoding UTF8 .\sql\005-correos-disponibles.sql | docker compose exec -T db psql -U cinematch -d cinematch -v ON_ERROR_STOP=1
 Get-Content -Raw -Encoding UTF8 .\sql\006-preferencias-plataformas.sql | docker compose exec -T db psql -U cinematch -d cinematch -v ON_ERROR_STOP=1
+Get-Content -Raw -Encoding UTF8 .\sql\007-listas-peliculas.sql | docker compose exec -T db psql -U cinematch -d cinematch -v ON_ERROR_STOP=1
 npm.cmd run start:postgres
 ```
 
@@ -159,6 +160,7 @@ borrar el volumen local para actualizar el esquema.
 | `004-confirmacion-correo.sql` | Confirmaciones y límite global de correo. |
 | `005-correos-disponibles.sql` | Correo e identidad de Google reservados solo por cuentas vigentes. |
 | `006-preferencias-plataformas.sql` | Tabla `preferencias_plataformas` por cuenta, región `ES` y proveedor. |
+| `007-listas-peliculas.sql` | Tabla `listas_peliculas` para listas personales y estado de disponibilidad. |
 
 Antes de desplegar código que use preferencias hay que aplicar la migración 006
 en local y en Cloud SQL.

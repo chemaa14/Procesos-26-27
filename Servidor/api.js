@@ -1,5 +1,6 @@
 import { ErrorDatos } from "./errores-datos.js";
 import { PreferenciasPlataformas } from "./preferencias-plataformas.js";
+import { ErrorListas, ListasPeliculas, extraerPlataformasIncluidas } from "./listas-peliculas.js";
 import { ErrorPlataformas, validarSeleccionPlataformas } from "./plataformas-tmdb.js";
 import { ErrorBusquedaPeliculas } from "./busqueda-peliculas.js";
 import { ErrorDetallePelicula } from "./detalle-pelicula.js";
@@ -54,6 +55,10 @@ const archivosPublicos = {
   },
   "/catalogo.js": {
     ruta: new URL("../Cliente/catalogo.js", import.meta.url),
+    tipo: "text/javascript; charset=utf-8"
+  },
+  "/listas.js": {
+    ruta: new URL("../Cliente/listas.js", import.meta.url),
     tipo: "text/javascript; charset=utf-8"
   }
 };
@@ -148,6 +153,7 @@ function leerJSON(peticion) {
 }
 
 const NOMBRE_COOKIE = "cinematch_sesion";
+const TAMANO_LOTE_COMPROBACION = 10;
 const DURACION_SESION_SEGUNDOS = 8 * 60 * 60;
 
 function leerTokenSesion(peticion) {
@@ -255,7 +261,8 @@ catalogo = null,
   detalle = null,
   disponibilidad = null,
   plataformas = null,
-  preferencias = new PreferenciasPlataformas(datos)
+  preferencias = new PreferenciasPlataformas(datos),
+  listas = new ListasPeliculas(datos)
 } = {})
  {
 
@@ -532,6 +539,93 @@ async function exigirUsuario(peticion) {
           return responderJSON(respuesta, 200, await preferencias.guardar(usuario.id, ids));
         }
 
+        if (ruta === "/api/listas") {
+          if (metodo !== "GET") return metodoNoPermitido(respuesta, "GET");
+          const usuario = await exigirUsuario(peticion);
+          actividad.usuarioId = usuario.id;
+          if (url.search) throw new ErrorListas("LISTA_INVALIDA", "La consulta de listas no admite parámetros.");
+          return responderJSON(respuesta, 200, await listas.listar(usuario.id));
+        }
+
+        if (ruta === "/api/listas/comprobar") {
+          if (metodo !== "POST") return metodoNoPermitido(respuesta, "POST");
+          comprobarCabeceraCliente(peticion);
+          const usuario = await exigirUsuario(peticion);
+          actividad.usuarioId = usuario.id;
+          if (url.search) throw new ErrorListas("LISTA_INVALIDA", "La consulta de listas no admite parámetros.");
+
+          const { elementos } = await listas.listar(usuario.id);
+          const pendientes = elementos.filter(item => item.estado === "quiero_ver");
+          let comprobadas = 0;
+
+          if (disponibilidad && pendientes.length) {
+            for (let inicio = 0; inicio < pendientes.length; inicio += TAMANO_LOTE_COMPROBACION) {
+              const lote = pendientes.slice(inicio, inicio + TAMANO_LOTE_COMPROBACION);
+              await Promise.all(lote.map(async (item) => {
+                try {
+                  const disp = await disponibilidad.obtener(String(item.peliculaId), usuario.id);
+                  const coincidentes = extraerPlataformasIncluidas(disp);
+                  await listas.actualizarDisponibilidad(usuario.id, item.peliculaId, {
+                    disponibleEnPlataformas: coincidentes.length > 0,
+                    plataformasCoincidentes: coincidentes
+                  });
+                  comprobadas += 1;
+                } catch {
+                  // Si una película falla puntualmente en TMDB, no bloqueamos el resto de la lista.
+                }
+              }));
+            }
+          }
+
+          const resultado = await listas.listar(usuario.id);
+          return responderJSON(respuesta, 200, {
+            ...resultado,
+            comprobadas,
+            nuevasDisponibles: resultado.elementos.filter(
+              item => item.estado === "quiero_ver" && item.recienDisponible
+            ).length
+          });
+        }
+
+        const rutaListaElemento = ruta.match(/^\/api\/listas\/([^/]+)$/);
+
+        if (rutaListaElemento) {
+          if (metodo !== "PUT" && metodo !== "DELETE") {
+            return metodoNoPermitido(respuesta, "PUT, DELETE");
+          }
+          comprobarCabeceraCliente(peticion);
+          const usuario = await exigirUsuario(peticion);
+          actividad.usuarioId = usuario.id;
+
+          if (metodo === "DELETE") {
+            await listas.eliminar(usuario.id, rutaListaElemento[1]);
+            respuesta.writeHead(204, { "Cache-Control": "no-store" });
+            return respuesta.end();
+          }
+
+          const cuerpo = await leerJSON(peticion);
+          let disponibilidadInicial = null;
+          if (disponibilidad) {
+            try {
+              const disp = await disponibilidad.obtener(rutaListaElemento[1], usuario.id);
+              const coincidentes = extraerPlataformasIncluidas(disp);
+              disponibilidadInicial = {
+                disponibleEnPlataformas: coincidentes.length > 0,
+                plataformasCoincidentes: coincidentes
+              };
+            } catch {
+              // Guardar en lista no debe fallar si TMDB disponibilidad no responde.
+            }
+          }
+
+          const elemento = await listas.guardar(
+            usuario.id,
+            { ...cuerpo, peliculaId: rutaListaElemento[1] },
+            disponibilidadInicial
+          );
+          return responderJSON(respuesta, 200, { elemento });
+        }
+
         const rutaDisponibilidad = ruta.match(
           /^\/api\/peliculas\/([^/]+)\/disponibilidad$/
         );
@@ -756,6 +850,13 @@ async function exigirUsuario(peticion) {
         return responderJSON(respuesta, estado, {
           error: estado === 500 ? "Error interno del servidor." : error.message,
           codigo: estado === 500 ? "ERROR_INTERNO" : error.codigo
+        });
+      }
+      if (error instanceof ErrorListas) {
+        const estado = error.codigo === "ELEMENTO_NO_ENCONTRADO" ? 404 : 400;
+        return responderJSON(respuesta, estado, {
+          error: error.message,
+          codigo: error.codigo
         });
       }
       if (error instanceof ErrorDatos && error.codigo === "PREFERENCIAS_INVALIDAS") {

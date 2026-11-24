@@ -35,7 +35,7 @@ const RUTAS = new Set([
   "/api/password/solicitar", "/api/password/restablecer",
   "/api/auth/google", "/api/auth/google/callback",
   "/api/logout", "/api/sesion", "/api/perfil", "/api/usuarios", "/api/peliculas",
-  "/api/plataformas", "/api/preferencias/plataformas", "/api/peliculas/:id", "/api/peliculas/:id/disponibilidad", "/api/usuarios/:id", "/api/usuarios/:id/activo", "otra"
+  "/api/plataformas", "/api/preferencias/plataformas", "/api/listas", "/api/listas/comprobar", "/api/listas/:id", "/api/peliculas/:id", "/api/peliculas/:id/disponibilidad", "/api/usuarios/:id", "/api/usuarios/:id/activo", "/listas.js", "otra"
 ]);
 const METODOS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -58,12 +58,14 @@ const CODIGOS = new Set([
   "TMDB_AUTENTICACION", "TMDB_NO_ENCONTRADO", "TMDB_LIMITE", "TMDB_HTTP",
   "TMDB_RED", "TMDB_TIMEOUT", "TMDB_RESPUESTA_INVALIDA", "CONFIGURACION_TMDB_INVALIDA",
   "PREFERENCIAS_INVALIDAS", "PLATAFORMAS_RESPUESTA_INVALIDA", "PLATAFORMA_NO_ADMITIDA",
+  "LISTA_INVALIDA", "ELEMENTO_NO_ENCONTRADO",
   "23505", "23514", "28P01", "3D000", "42P01", "42703", "42501",
   "ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "EADDRINUSE"
 ]);
 
 export function rutaParaRegistro(pathname) {
   if (RUTAS.has(pathname)) return pathname;
+  if (/^\/api\/listas\/[^/]+$/.test(pathname)) return "/api/listas/:id";
   if (/^\/api\/peliculas\/[^/]+\/disponibilidad$/.test(pathname)) return "/api/peliculas/:id/disponibilidad";
   if (/^\/api\/peliculas\/[^/]+$/.test(pathname)) return "/api/peliculas/:id";
   if (/^\/api\/usuarios\/[^/]+\/activo$/.test(pathname)) return "/api/usuarios/:id/activo";
