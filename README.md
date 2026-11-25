@@ -287,6 +287,24 @@ antiguas. El detalle se cierra con Escape o con **Volver a resultados**.
   las suscripciones; no se afirma que la película no se pueda ver.
 - Un fallo de disponibilidad no impide consultar la ficha.
 
+### ¿Qué vemos hoy? (sugerencia aleatoria)
+
+- En el catálogo, el botón **¿Qué vemos hoy?** propone una película al azar
+  incluida en la suscripción de alguna de las plataformas guardadas en
+  «Mis plataformas» y abre su ficha con la disponibilidad habitual.
+- Filtros opcionales y combinables: género (lista de TMDB en español),
+  duración máxima (hasta 1 h 30 min, 2 h, 2 h 30 min o 3 h) y valoración
+  mínima de TMDB (6, 7 u 8 o más; con este filtro se exigen al menos 50 votos).
+- **Otra sugerencia** repite la petición con los mismos filtros y sin volver a
+  proponer la película anterior.
+- `GET /api/sugerencia?genero=&duracionMaxima=&valoracionMinima=&excluir=`
+  consulta TMDB `discover/movie` con `watch_region=ES`, las plataformas de la
+  sesión (`with_watch_providers`) y solo suscripción (`flatrate`). Elige al azar
+  una página (hasta la 500) y una película de esa página.
+- Sin plataformas seleccionadas o sin resultados responde `200` con
+  `pelicula: null` y un mensaje; no se inventan películas.
+- `GET /api/generos` devuelve los géneros de películas de TMDB en español.
+
 ## API y permisos
 
 | Método y ruta | Acceso |
@@ -308,6 +326,8 @@ antiguas. El detalle se cierra con Escape o con **Volver a resultados**.
 | GET `/api/peliculas` | Sesión válida; búsqueda paginada |
 | GET `/api/peliculas/:id` | Sesión válida; ficha normalizada |
 | GET `/api/peliculas/:id/disponibilidad` | Sesión válida; disponibilidad en España |
+| GET `/api/sugerencia` | Sesión válida; película aleatoria de las plataformas propias |
+| GET `/api/generos` | Sesión válida; géneros de películas de TMDB |
 | GET `/api/plataformas` | Sesión válida; catálogo de plataformas |
 | GET `/api/preferencias/plataformas` | Sesión válida; preferencias propias |
 | PUT `/api/preferencias/plataformas` | Sesión válida y `X-CineMatch: 1`; guarda preferencias |

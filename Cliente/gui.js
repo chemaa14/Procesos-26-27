@@ -23,8 +23,20 @@ import {
   eliminarUsuario,
   buscarPeliculas,
   obtenerDetallePelicula,
-  obtenerDisponibilidadPelicula
+  obtenerDisponibilidadPelicula,
+  obtenerSugerencia,
+  obtenerGeneros
 } from "./rest.js";
+import {
+  OPCIONES_DURACION,
+  OPCIONES_VALORACION,
+  filtrosOtraSugerencia,
+  generosValidos,
+  leerFiltrosSugerencia,
+  textoOpcionDuracion,
+  textoOpcionValoracion,
+  textoResultadoSugerencia
+} from "./sugerencia.js";
 import {
   TEXTO_ANIO_AUSENTE,
   TEXTO_CARTEL_AUSENTE,
@@ -125,6 +137,14 @@ const fuenteDisponibilidad = document.getElementById("fuente-disponibilidad");
 const fechaDisponibilidad = document.getElementById("fecha-disponibilidad");
 const enlaceDisponibilidad = document.getElementById("enlace-disponibilidad");
 
+const formSugerencia = document.getElementById("form-sugerencia");
+const sugerenciaGenero = document.getElementById("sugerencia-genero");
+const sugerenciaDuracion = document.getElementById("sugerencia-duracion");
+const sugerenciaValoracion = document.getElementById("sugerencia-valoracion");
+const botonSugerencia = document.getElementById("boton-sugerencia");
+const botonOtraSugerencia = document.getElementById("otra-sugerencia");
+const estadoSugerencia = document.getElementById("estado-sugerencia");
+
 const estadoCatalogoUI = crearEstadoCatalogo();
 const estadoDisponibilidadUI = crearEstadoDisponibilidad();
 let usuarioActual = null;
@@ -138,6 +158,11 @@ let reintentoBusqueda = null;
 let detallePendiente = null;
 let disponibilidadPendiente = null;
 let focoDetalle = null;
+let cargandoSugerencia = false;
+let solicitudSugerencia = 0;
+let ultimaSugerencia = null;
+let filtrosSugerencia = {};
+let generosCargados = false;
 const selectorPlataformas = crearSelectorPlataformas(document.getElementById("panel-plataformas"), {
   estaOcupado: () => ocupado,
   alCaducar: () => volverAlAccesoPorSesion(),
@@ -177,6 +202,7 @@ function mostrarUsuario(usuario) {
   if (cambiaUsuario || !usuario) {
     limpiarCatalogoUI();
   }
+  if (usuario && !generosCargados) void cargarGenerosSugerencia();
 
   panelAdmin.hidden = usuario?.rol !== "administrador";
   panelCatalogo.hidden = !usuario;
@@ -336,6 +362,13 @@ function actualizarControlesCatalogo() {
   botonReintentarCatalogo.disabled = !habilitado || cargandoBusqueda;
   botonReintentarDetalle.disabled = !habilitado || cargandoDetalle;
   botonReintentarDisponibilidad.disabled = !habilitado || cargandoDisponibilidad;
+
+  sugerenciaGenero.disabled = !habilitado || cargandoSugerencia;
+  sugerenciaDuracion.disabled = !habilitado || cargandoSugerencia;
+  sugerenciaValoracion.disabled = !habilitado || cargandoSugerencia;
+  botonSugerencia.disabled = !habilitado || cargandoSugerencia;
+  botonOtraSugerencia.disabled = !habilitado || cargandoSugerencia;
+  formSugerencia.setAttribute("aria-busy", String(cargandoSugerencia));
 
   formBusqueda.setAttribute("aria-busy", String(cargandoBusqueda));
   detallePelicula.setAttribute("aria-busy", String(cargandoDetalle));
@@ -537,6 +570,13 @@ function limpiarCatalogoUI() {
   focoDetalle = null;
 
   formBusqueda.reset();
+  formSugerencia.reset();
+  solicitudSugerencia += 1;
+  cargandoSugerencia = false;
+  ultimaSugerencia = null;
+  filtrosSugerencia = {};
+  botonOtraSugerencia.hidden = true;
+  estadoSugerencia.textContent = "";
   listaPeliculas.replaceChildren();
   resultados.hidden = true;
   resumenResultados.textContent = "";
@@ -853,6 +893,96 @@ function irAPagina(direccion) {
 
   ejecutarBusqueda(solicitud.consulta, solicitud);
 }
+
+// ¿Qué vemos hoy?: opciones fijas, géneros de TMDB y petición de sugerencias.
+function anadirOpcion(select, valor, texto) {
+  const opcion = document.createElement("option");
+  opcion.value = String(valor);
+  opcion.textContent = texto;
+  select.append(opcion);
+}
+
+for (const minutos of OPCIONES_DURACION) {
+  anadirOpcion(sugerenciaDuracion, minutos, textoOpcionDuracion(minutos));
+}
+for (const nota of OPCIONES_VALORACION) {
+  anadirOpcion(sugerenciaValoracion, nota, textoOpcionValoracion(nota));
+}
+
+async function cargarGenerosSugerencia() {
+  generosCargados = true;
+  try {
+    const generos = generosValidos(await obtenerGeneros());
+    for (const genero of generos) anadirOpcion(sugerenciaGenero, genero.id, genero.nombre);
+  } catch {
+    // Sin la lista de géneros se puede pedir igualmente una sugerencia sin ese filtro.
+    generosCargados = false;
+  }
+}
+
+async function pedirSugerencia({ otra = false } = {}) {
+  if (!usuarioActual || ocupado || cargandoSugerencia) return;
+
+  let filtros;
+  if (otra && ultimaSugerencia) {
+    filtros = filtrosOtraSugerencia(filtrosSugerencia, ultimaSugerencia);
+  } else {
+    const lectura = leerFiltrosSugerencia({
+      genero: sugerenciaGenero.value,
+      duracionMaxima: sugerenciaDuracion.value,
+      valoracionMinima: sugerenciaValoracion.value
+    });
+    if (!lectura.valido) {
+      estadoSugerencia.textContent = lectura.error;
+      return;
+    }
+    filtrosSugerencia = lectura.filtros;
+    filtros = lectura.filtros;
+  }
+
+  const solicitud = ++solicitudSugerencia;
+  cargandoSugerencia = true;
+  estadoSugerencia.textContent = "Buscando una película para hoy...";
+  actualizarControlesCatalogo();
+
+  try {
+    const resultado = await obtenerSugerencia(filtros);
+    if (solicitud !== solicitudSugerencia || !usuarioActual) return;
+
+    estadoSugerencia.textContent = textoResultadoSugerencia(resultado);
+    if (resultado?.pelicula) {
+      ultimaSugerencia = resultado.pelicula;
+      botonOtraSugerencia.hidden = false;
+      cargandoSugerencia = false;
+      // La sugerencia se muestra con la ficha y la disponibilidad habituales.
+      abrirDetalle(resultado.pelicula, otra ? botonOtraSugerencia : botonSugerencia);
+    } else if (!otra) {
+      ultimaSugerencia = null;
+      botonOtraSugerencia.hidden = true;
+    }
+  } catch (error) {
+    if (solicitud !== solicitudSugerencia || !usuarioActual) return;
+    if (error?.estado === 401) {
+      volverAlAccesoPorSesion();
+      return;
+    }
+    estadoSugerencia.textContent = error?.message ?? "No se pudo obtener una sugerencia.";
+  } finally {
+    if (solicitud === solicitudSugerencia) {
+      cargandoSugerencia = false;
+      actualizarControlesCatalogo();
+    }
+  }
+}
+
+formSugerencia.addEventListener("submit", evento => {
+  evento.preventDefault();
+  void pedirSugerencia();
+});
+
+botonOtraSugerencia.addEventListener("click", () => {
+  void pedirSugerencia({ otra: true });
+});
 
 function validarFormularioBusqueda() {
   const validacion = validarBusqueda({

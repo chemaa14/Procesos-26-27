@@ -192,3 +192,18 @@ export function guardarPreferenciasPlataformas(plataformas) {
     metodo: "PUT", datos: { plataformas }
   });
 }
+
+// Sugerencia aleatoria según las plataformas guardadas (filtros opcionales).
+export function obtenerSugerencia(filtros = {}) {
+  const parametros = new URLSearchParams();
+  for (const clave of ["genero", "duracionMaxima", "valoracionMinima", "excluir"]) {
+    const valor = filtros[clave];
+    if (valor !== undefined && valor !== null && valor !== "") parametros.set(clave, String(valor));
+  }
+  const consulta = parametros.toString();
+  return realizarPeticion(`/api/sugerencia${consulta ? `?${consulta}` : ""}`);
+}
+
+export function obtenerGeneros() {
+  return realizarPeticion("/api/generos");
+}

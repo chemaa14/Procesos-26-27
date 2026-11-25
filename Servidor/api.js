@@ -4,6 +4,7 @@ import { ErrorPlataformas, validarSeleccionPlataformas } from "./plataformas-tmd
 import { ErrorBusquedaPeliculas } from "./busqueda-peliculas.js";
 import { ErrorDetallePelicula } from "./detalle-pelicula.js";
 import { ErrorDisponibilidadPelicula } from "./disponibilidad-pelicula.js";
+import { ErrorSugerenciaPelicula, PARAMETROS_SUGERENCIA } from "./sugerencia-pelicula.js";
 import { ErrorCatalogoTMDB } from "./catalogo-tmdb.js";
 import { ErrorConfirmacion } from "./confirmaciones.js";
 import { ErrorRecuperacion, MENSAJE_SOLICITUD_RECUPERACION } from "./recuperaciones.js";
@@ -54,6 +55,10 @@ const archivosPublicos = {
   },
   "/catalogo.js": {
     ruta: new URL("../Cliente/catalogo.js", import.meta.url),
+    tipo: "text/javascript; charset=utf-8"
+  },
+  "/sugerencia.js": {
+    ruta: new URL("../Cliente/sugerencia.js", import.meta.url),
     tipo: "text/javascript; charset=utf-8"
   }
 };
@@ -242,6 +247,19 @@ function leerConsultaBusqueda(url) {
   return consulta;
 }
 
+function leerConsultaSugerencia(url) {
+  const consulta = {};
+
+  for (const [clave] of url.searchParams) {
+    if (!PARAMETROS_SUGERENCIA.includes(clave) || url.searchParams.getAll(clave).length > 1) {
+      throw new ErrorSugerenciaPelicula("ENTRADA_INVALIDA");
+    }
+    consulta[clave] = url.searchParams.get(clave);
+  }
+
+  return consulta;
+}
+
 export function crearAplicacion({
   cookieSegura = process.env.NODE_ENV === "production",
   datos = new DatosUsuarios(),
@@ -255,7 +273,8 @@ catalogo = null,
   detalle = null,
   disponibilidad = null,
   plataformas = null,
-  preferencias = new PreferenciasPlataformas(datos)
+  preferencias = new PreferenciasPlataformas(datos),
+  sugerencias = null
 } = {})
  {
 
@@ -530,6 +549,35 @@ async function exigirUsuario(peticion) {
             if (ids.some(id => !admitidas.has(id))) throw new ErrorPlataformas("PLATAFORMA_NO_ADMITIDA");
           }
           return responderJSON(respuesta, 200, await preferencias.guardar(usuario.id, ids));
+        }
+
+        if (ruta === "/api/sugerencia" || ruta === "/api/generos") {
+          if (metodo !== "GET") {
+            return metodoNoPermitido(respuesta, "GET");
+          }
+
+          const usuario = await exigirUsuario(peticion);
+          actividad.usuarioId = usuario.id;
+
+          if (!sugerencias) {
+            actividad.codigo = "CATALOGO_NO_CONFIGURADO";
+            return responderJSON(respuesta, 503, {
+              error: "El catálogo no está disponible.",
+              codigo: "CATALOGO_NO_CONFIGURADO"
+            });
+          }
+
+          if (ruta === "/api/generos") {
+            if (url.search) throw new ErrorSugerenciaPelicula("ENTRADA_INVALIDA");
+            return responderJSON(respuesta, 200, await sugerencias.listarGeneros());
+          }
+
+          // La identidad (y con ella las plataformas) sale de la sesión.
+          return responderJSON(
+            respuesta,
+            200,
+            await sugerencias.sugerir(usuario.id, leerConsultaSugerencia(url))
+          );
         }
 
         const rutaDisponibilidad = ruta.match(
@@ -810,6 +858,14 @@ async function exigirUsuario(peticion) {
         return responderJSON(respuesta, estado, {
           error: estado === 500 ? "Error interno del servidor." : error.message,
           codigo: codigos[error.codigo] ?? "ERROR_INTERNO"
+        });
+      }
+
+      if (error instanceof ErrorSugerenciaPelicula) {
+        const esEntrada = error.codigo === "ENTRADA_INVALIDA";
+        return responderJSON(respuesta, esEntrada ? 400 : 502, {
+          error: error.message,
+          codigo: esEntrada ? "SUGERENCIA_INVALIDA" : "SUGERENCIA_RESPUESTA_INVALIDA"
         });
       }
 

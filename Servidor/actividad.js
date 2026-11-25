@@ -35,7 +35,7 @@ const RUTAS = new Set([
   "/api/password/solicitar", "/api/password/restablecer",
   "/api/auth/google", "/api/auth/google/callback",
   "/api/logout", "/api/sesion", "/api/perfil", "/api/usuarios", "/api/peliculas",
-  "/api/plataformas", "/api/preferencias/plataformas", "/api/peliculas/:id", "/api/peliculas/:id/disponibilidad", "/api/usuarios/:id", "/api/usuarios/:id/activo", "otra"
+  "/api/plataformas", "/api/preferencias/plataformas", "/api/sugerencia", "/api/generos", "/api/peliculas/:id", "/api/peliculas/:id/disponibilidad", "/api/usuarios/:id", "/api/usuarios/:id/activo", "otra"
 ]);
 const METODOS = new Set(["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

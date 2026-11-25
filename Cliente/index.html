@@ -290,6 +290,44 @@
         </p>
       </form>
 
+      <form id="form-sugerencia" class="buscador sugerencia" aria-labelledby="titulo-sugerencia" novalidate>
+        <div class="sugerencia-cabecera">
+          <h3 id="titulo-sugerencia">¿No sabes qué ver?</h3>
+          <p class="nota-seccion">
+            Te proponemos una película al azar incluida en tus plataformas. Los filtros son opcionales.
+          </p>
+        </div>
+
+        <div class="campos-sugerencia">
+          <div class="campo">
+            <label for="sugerencia-genero">Género</label>
+            <select id="sugerencia-genero" name="genero">
+              <option value="">Cualquier género</option>
+            </select>
+          </div>
+
+          <div class="campo">
+            <label for="sugerencia-duracion">Duración máxima</label>
+            <select id="sugerencia-duracion" name="duracionMaxima">
+              <option value="">Cualquier duración</option>
+            </select>
+          </div>
+
+          <div class="campo">
+            <label for="sugerencia-valoracion">Valoración mínima</label>
+            <select id="sugerencia-valoracion" name="valoracionMinima">
+              <option value="">Cualquier valoración</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="acciones-sugerencia">
+          <button id="boton-sugerencia" class="boton boton-primario" type="submit">¿Qué vemos hoy?</button>
+          <button id="otra-sugerencia" class="boton boton-secundario" type="button" hidden>Otra sugerencia</button>
+        </div>
+        <p id="estado-sugerencia" class="estado-sugerencia" role="status" aria-live="polite"></p>
+      </form>
+
       <p id="estado-catalogo" class="estado-seccion" role="status" aria-live="polite" tabindex="-1"></p>
       <p id="error-catalogo" class="error" role="alert" tabindex="-1" hidden></p>
       <button id="reintentar-catalogo" class="boton boton-secundario" type="button" hidden>
