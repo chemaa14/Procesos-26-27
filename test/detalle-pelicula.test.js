@@ -55,7 +55,7 @@ test("normaliza la ficha y consulta /movie/{id} con language es-ES", async () =>
   const ficha = await servicio.obtener("550");
 
   assert.equal(control.ruta, "/movie/550");
-  assert.deepEqual(control.parametros, { language: "es-ES" });
+  assert.deepEqual(control.parametros, { language: "es-ES", append_to_response: "videos", include_video_language: "es,en" });
   assert.deepEqual(ficha, {
     id: 550,
     titulo: "El club de la lucha",
@@ -67,7 +67,8 @@ test("normaliza la ficha y consulta /movie/{id} con language es-ES", async () =>
       { id: 53, nombre: "Suspense" }
     ],
     duracion: 139,
-    cartel: "https://image.tmdb.org/t/p/w500/fightclub.jpg"
+    cartel: "https://image.tmdb.org/t/p/w500/fightclub.jpg",
+    trailer: null
   });
   assert.equal(JSON.stringify(ficha).includes(TEXTO_PROVEEDOR), false);
   assert.equal(JSON.stringify(ficha).includes("campo_bruto"), false);
@@ -123,7 +124,8 @@ test("los campos opcionales ausentes o inválidos no rompen la ficha", async () 
     sinopsis: null,
     generos: [{ id: 12, nombre: "Aventura" }],
     duracion: null,
-    cartel: null
+    cartel: null,
+    trailer: null
   });
 });
 
@@ -142,8 +144,46 @@ test("admite fichas sin géneros, sinopsis, duración ni cartel", async () => {
     sinopsis: null,
     generos: [],
     duracion: null,
-    cartel: null
+    cartel: null,
+    trailer: null
   });
+});
+
+test("enlaza el tráiler de YouTube: tráiler antes que teaser, en español y oficial", async () => {
+  const videos = {
+    results: [
+      { site: "YouTube", key: "teaserEsp01", type: "Teaser", iso_639_1: "es", official: true },
+      { site: "Vimeo", key: "vimeoClave1", type: "Trailer", iso_639_1: "es", official: true },
+      { site: "YouTube", key: "trailerEn01", type: "Trailer", iso_639_1: "en", official: true },
+      { site: "YouTube", key: "trailerEs01", type: "Trailer", iso_639_1: "es", official: false },
+      { site: "YouTube", key: "trailerEs02", type: "Trailer", iso_639_1: "es", official: true },
+      { site: "YouTube", key: "detras-esc1", type: "Behind the Scenes", iso_639_1: "es", official: true }
+    ]
+  };
+  const { servicio } = servicioCon(fichaCompleta({ videos }));
+
+  const ficha = await servicio.obtener("550");
+
+  assert.equal(ficha.trailer, "https://www.youtube.com/watch?v=trailerEs02");
+});
+
+test("sin tráiler válido de YouTube la ficha lleva trailer null", async () => {
+  const casos = [
+    undefined,
+    null,
+    { results: "no" },
+    { results: [] },
+    { results: [{ site: "YouTube", key: "corta", type: "Trailer" }] },
+    { results: [{ site: "YouTube", key: "<script>x</", type: "Trailer" }] },
+    { results: [{ site: "YouTube", key: "clavebuena1", type: "Featurette" }] },
+    { results: [null, "texto", { site: "Vimeo", key: "clavebuena1", type: "Trailer" }] }
+  ];
+
+  for (const videos of casos) {
+    const { servicio } = servicioCon(fichaCompleta({ videos }));
+    const ficha = await servicio.obtener("550");
+    assert.equal(ficha.trailer, null);
+  }
 });
 
 test("acepta el límite int32 y rechaza identificadores no canónicos sin consultar", async () => {

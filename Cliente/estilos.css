@@ -746,6 +746,24 @@ button:disabled {
   white-space: pre-line;
 }
 
+.enlace-trailer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--coral);
+  border-radius: 999px;
+  color: var(--texto);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.enlace-trailer:hover {
+  background: var(--coral);
+  color: #241826;
+}
+
 .disponibilidad-pelicula {
   margin-top: 26px;
   padding-top: 20px;

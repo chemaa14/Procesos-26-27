@@ -110,6 +110,8 @@ const detalleAnio = document.getElementById("detalle-anio");
 const detalleDuracion = document.getElementById("detalle-duracion");
 const detalleGeneros = document.getElementById("detalle-generos");
 const detalleSinopsis = document.getElementById("detalle-sinopsis");
+const detalleTrailerZona = document.getElementById("detalle-trailer-zona");
+const detalleTrailer = document.getElementById("detalle-trailer");
 const estadoDetalle = document.getElementById("estado-detalle");
 const errorDetalle = document.getElementById("error-detalle");
 const botonReintentarDetalle = document.getElementById("reintentar-detalle");
@@ -551,6 +553,7 @@ function limpiarCatalogoUI() {
   detalleDuracion.textContent = "";
   detalleGeneros.textContent = "";
   detalleSinopsis.textContent = "";
+  pintarTrailer(null);
   limpiarDisponibilidadUI();
 
   estadoCatalogo.textContent = "";
@@ -651,6 +654,18 @@ function renderizarResultados() {
   actualizarControlesCatalogo();
 }
 
+// El servidor solo manda enlaces de YouTube ya validados; aun así se comprueba antes de ponerlo en el href.
+function pintarTrailer(url) {
+  const valido = typeof url === "string" && /^https:\/\/www\.youtube\.com\/watch\?v=[A-Za-z0-9_-]{11}$/.test(url);
+  if (valido) {
+    detalleTrailer.href = url;
+    detalleTrailer.setAttribute("aria-label", `Ver el tráiler de ${detalleTitulo.textContent || "la película"} en YouTube (se abre en otra pestaña)`);
+  } else {
+    detalleTrailer.removeAttribute("href");
+  }
+  detalleTrailerZona.hidden = !valido;
+}
+
 function renderizarDetalle(ficha) {
   const titulo = textoTitulo(ficha?.titulo);
   const anio = textoAnio(ficha?.anio);
@@ -663,6 +678,7 @@ function renderizarDetalle(ficha) {
   detalleDuracion.textContent = textoDuracion(ficha?.duracion);
   detalleGeneros.textContent = textoGeneros(ficha?.generos);
   detalleSinopsis.textContent = textoSinopsis(ficha?.sinopsis);
+  pintarTrailer(ficha?.trailer);
   detalleContenido.hidden = false;
   estadoDetalle.textContent = "";
   ocultarErrorDetalle();
