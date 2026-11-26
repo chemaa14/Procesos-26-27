@@ -300,12 +300,13 @@ test("recorrido autenticado con búsqueda paginada, detalle y nueva búsqueda si
         { id: 12, nombre: "Aventura" }
       ],
       duracion: 155,
-      cartel: `${CARTEL_BASE}/dune-2021.jpg`
+      cartel: `${CARTEL_BASE}/dune-2021.jpg`,
+      trailer: null
     });
     assert.equal(peticiones.length, 3);
     comprobarPeticionProveedor(peticiones[2], {
       ruta: "/movie/438631",
-      parametros: { language: "es-ES" }
+      parametros: { language: "es-ES", append_to_response: "videos", include_video_language: "es,en" }
     });
 
     const nueva = await buscarYLeer(base, cookie, "?titulo=Matrix");

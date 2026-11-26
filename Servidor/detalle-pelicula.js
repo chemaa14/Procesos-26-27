@@ -6,6 +6,8 @@ const CONTROL_SINOPSIS = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/
 const ID_VALIDO = /^[1-9]\d*$/;
 const CARTEL_SEGURO = /^\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
 const FECHA_VALIDA = /^(\d{4})-\d{2}-\d{2}$/;
+const CLAVE_YOUTUBE = /^[A-Za-z0-9_-]{11}$/;
+const TIPOS_TRAILER = ["Trailer", "Teaser"];
 const ANIO_MINIMO = 1000;
 const ANIO_MAXIMO = 9999;
 
@@ -97,6 +99,19 @@ function construirCartel(ruta) {
   return CARTEL_BASE + ruta;
 }
 
+// Elige el tráiler de YouTube que se enlaza en la ficha: tráiler antes que teaser, en español antes que en
+// otro idioma y oficial antes que no oficial. Solo se acepta una clave de vídeo de YouTube con su formato.
+function elegirTrailer(videos) {
+  const lista = Array.isArray(videos?.results) ? videos.results : [];
+  const validos = lista.filter((v) => v && typeof v === "object" && v.site === "YouTube" &&
+    typeof v.key === "string" && CLAVE_YOUTUBE.test(v.key) && TIPOS_TRAILER.includes(v.type));
+  if (!validos.length) return null;
+
+  const puntos = (v) => (v.type === "Trailer" ? 4 : 0) + (v.iso_639_1 === "es" ? 2 : 0) + (v.official === true ? 1 : 0);
+  const mejor = validos.reduce((a, b) => (puntos(b) > puntos(a) ? b : a));
+  return `https://www.youtube.com/watch?v=${mejor.key}`;
+}
+
 function normalizarFicha(datos, idSolicitado) {
   if (!datos || typeof datos !== "object" || Array.isArray(datos)) {
     throw respuestaInvalida();
@@ -115,7 +130,8 @@ function normalizarFicha(datos, idSolicitado) {
     sinopsis: textoSinopsis(datos.overview),
     generos: normalizarGeneros(datos.genres),
     duracion: normalizarDuracion(datos.runtime),
-    cartel: construirCartel(datos.poster_path)
+    cartel: construirCartel(datos.poster_path),
+    trailer: elegirTrailer(datos.videos)
   };
 }
 
@@ -131,7 +147,10 @@ export function crearServicioDetalle(catalogo) {
       let datos;
       try {
         datos = await catalogo.consultar(`/movie/${idSolicitado}`, {
-          language: "es-ES"
+          language: "es-ES",
+          // En la misma petición: los vídeos en español y, si no hay, en inglés (para el tráiler).
+          append_to_response: "videos",
+          include_video_language: "es,en"
         });
       } catch (error) {
         if (error?.codigo === "TMDB_NO_ENCONTRADO") {

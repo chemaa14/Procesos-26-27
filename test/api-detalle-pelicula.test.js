@@ -166,10 +166,11 @@ test("devuelve la ficha normalizada usando /movie/{id} y language es-ES", async 
       sinopsis: "Un oficinista conoce a un vendedor de jabón.",
       generos: [{ id: 18, nombre: "Drama" }],
       duracion: 139,
-      cartel: "https://image.tmdb.org/t/p/w500/fightclub.jpg"
+      cartel: "https://image.tmdb.org/t/p/w500/fightclub.jpg",
+      trailer: null
     });
     assert.equal(control.ruta, "/movie/550");
-    assert.deepEqual(control.parametros, { language: "es-ES" });
+    assert.deepEqual(control.parametros, { language: "es-ES", append_to_response: "videos", include_video_language: "es,en" });
   }, { catalogo, detalle });
 });
 
@@ -219,7 +220,8 @@ test("los opcionales ausentes no rompen la ficha", async () => {
       sinopsis: null,
       generos: [],
       duracion: null,
-      cartel: null
+      cartel: null,
+      trailer: null
     });
   }, { catalogo, detalle });
 });

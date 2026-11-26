@@ -264,6 +264,10 @@ contrato propio:
 - Los datos ausentes se marcan como no disponibles; no se inventan.
 - `GET /api/peliculas/:id` devuelve título, año, sinopsis, géneros, duración y
   cartel normalizados. La ruta rechaza identificadores no canónicos.
+- La ficha incluye `trailer`: el enlace al tráiler de YouTube que da TMDB en la
+  misma petición (`append_to_response=videos`, vídeos en español y, si no hay,
+  en inglés). Se prefiere tráiler a teaser, en español y oficial; si no hay
+  ninguno válido es `null` y la ficha no muestra el botón **▶ Ver tráiler**.
 
 La interfaz busca solo al enviar el formulario, reinicia la página a 1 en cada
 búsqueda nueva, conserva la búsqueda al volver del detalle y descarta respuestas
